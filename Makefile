@@ -1,4 +1,3 @@
-
 CC = gcc
 INC_DIR = ./include
 SRC_DIR = ./src
