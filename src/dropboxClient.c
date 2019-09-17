@@ -7,21 +7,35 @@ int main(int argc, char *argv[]) {
 	struct sockaddr_in serv_addr, from;
 	struct hostent *server;
 	char buffer[256];
+	char folder[256];
+	char user[USER_NAME_SIZE];
 	Connection *connection = malloc(sizeof(*connection));
 
 	DEBUG_PRINT("OPÇÃO DE DEBUG ATIVADA\n");
 
-	if (argc < 2) {
-		fprintf(stderr, "usage %s hostname\n", argv[0]);
-		exit(0);
+	if (argc < 3) {
+        printf("Falta de argumentos ./dropboxClient user endereço");
+        return FAILURE;
+    }
 
-	}
-
-	server = gethostbyname(argv[1]);
+	server = gethostbyname(argv[2]);
 	if (server == NULL) {
         fprintf(stderr,"ERROR, no such host\n");
-        exit(0);
+        return FAILURE;
     }
+
+    if (strlen(argv[1]) <= USER_NAME_SIZE) {
+        strcpy(user, argv[1]);
+        strcpy(folder, getUserHome());
+        strcat(folder, "/dropbox_dir_");
+        strcat(folder, user);
+    } else {
+        printf("O tamanho máximo para o novo usuário é %d", USER_NAME_SIZE);
+        return FAILURE;
+    }
+
+    DEBUG_PRINT("User: %s\n", user);
+    DEBUG_PRINT("Folder: %s\n", folder);
 
 	if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) == -1)
 		printf("ERROR opening socket");
@@ -34,18 +48,24 @@ int main(int argc, char *argv[]) {
 	connection->socket = sockfd;
     connection->adress = &serv_addr;
 
-    sendFile("text.txt", connection);
-
 	length = sizeof(struct sockaddr_in);
-	n = recvfrom(sockfd, buffer, 256, 0, (struct sockaddr *) &from, &length);
-	if (n < 0)
-		printf("ERROR recvfrom");
 
-	printf("Got an ack: %s\n", buffer);
+	// continuar
 
 	close(sockfd);
 
-	return 0;
+	return SUCCESS;
+}
+
+int firstConnection(char *user, char *folder, Connection *connection) {
+    Package *package;
+    char data[DATA_SEGMENT_SIZE];
+    bzero(data, DATA_SEGMENT_SIZE);
+    data[0] = CMD_CONNECT;
+    package = newPackage(CMD, user, 0, 0, data);
+    sendPackage(package, connection);
+    // continuar
+    return SUCCESS;
 }
 
 void sendFile(char *file, Connection *connection) {
@@ -72,8 +92,8 @@ void sendFile(char *file, Connection *connection) {
                 fread(data, sizeof(char), DATA_SEGMENT_SIZE, pFile);
             }
 
-            package = newPackage("Guilherme", seq, length, data);
-            sendPackage(connection->socket, connection->adress, package);
+            package = newPackage(CMD, "username", seq, length, data);
+            sendPackage(package, connection);
             seq++;
         }
         fclose(pFile);

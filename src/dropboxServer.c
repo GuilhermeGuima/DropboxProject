@@ -24,6 +24,7 @@ int main(int argc, char *argv[])
 	clilen = sizeof(struct sockaddr_in);
 
 	while (TRUE) {
+
 		n = recvfrom(sockfd, package, PACKAGE_SIZE, 0, (struct sockaddr *) &cli_addr, &clilen);
 		if (n < 0)
 			printf("ERROR on recvfrom");
@@ -36,5 +37,5 @@ int main(int argc, char *argv[])
 
 	close(sockfd);
 
-	return 0;
+	return SUCCESS;
 }

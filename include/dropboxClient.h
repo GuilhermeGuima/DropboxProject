@@ -9,3 +9,6 @@
 #include <string.h>
 
 #define PORT 4000
+
+
+void sendFile(char *file, Connection *connection);
