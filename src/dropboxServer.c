@@ -1,5 +1,5 @@
-#include "../include/dropboxServer.h"
 #include "../include/dropboxUtil.h"
+#include "../include/dropboxServer.h"
 
 int main(int argc, char *argv[])
 {
@@ -23,14 +23,14 @@ int main(int argc, char *argv[])
 
 	clilen = sizeof(struct sockaddr_in);
 
-	while (1) {
-		n = recvfrom(sockfd, package, 1024, 0, (struct sockaddr *) &cli_addr, &clilen);
+	while (TRUE) {
+		n = recvfrom(sockfd, package, PACKAGE_SIZE, 0, (struct sockaddr *) &cli_addr, &clilen);
 		if (n < 0)
 			printf("ERROR on recvfrom");
-		print_package(package);
+		printPackage(package);
 
 		n = sendto(sockfd, "Got your message\n", 17, 0,(struct sockaddr *) &cli_addr, sizeof(struct sockaddr));
-		if (n  < 0)
+		if (n < 0)
 			printf("ERROR on sendto");
 	}
 

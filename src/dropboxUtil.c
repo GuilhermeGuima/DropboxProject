@@ -1,17 +1,21 @@
 #include "../include/dropboxUtil.h"
 
-void print_package(Package *package) {
+void printPackage(Package *package) {
+    DEBUG_PRINT("PRINTANDO PACOTE\n");
     printf("%s\n", package->user);
     printf("%hu\n", package->seq);
     printf("%hu\n", package->length);
     printf("%s\n", package->data);
 }
 
-Package* new_package(char* user, unsigned short int seq, unsigned short int length, char *data) {
-    if (strlen(user) > 20) {
+Package* newPackage(char* user, unsigned short int seq, unsigned short int length, char *data) {
+    DEBUG_PRINT("CRIANDO NOVO PACOTE\n");
+    if (strlen(user) > USER_NAME_SIZE) {
+        DEBUG_PRINT("FALHA AO CRIAR NOVO PACOTE, NOME DO USUARIO MUITO GRANDE\n");
         return NULL;
     }
-    if (strlen(user) > 20) {
+    if (strlen(data) > DATA_SEGMENT_SIZE) {
+        DEBUG_PRINT("FALHA AO CRIAR NOVO PACOTE, AREA DE DADOS MUITO GRANDE\n");
         return NULL;
     }
 
@@ -23,14 +27,19 @@ Package* new_package(char* user, unsigned short int seq, unsigned short int leng
     return package;
 }
 
-int send_package(int sockfd, struct sockaddr_in* adress, Package *package) {
+int sendPackage(int sockfd, struct sockaddr_in* adress, Package *package) {
     int n;
     DEBUG_PRINT("ENVIANDO PACOTE\n");
-    n = sendto(sockfd, package, 1024, 0, (const struct sockaddr *) adress, sizeof(struct sockaddr_in));
-	printf("\n%d",n);
+    n = sendto(sockfd, package, PACKAGE_SIZE, 0, (const struct sockaddr *) adress, sizeof(struct sockaddr_in));
 	if (n < 0) {
         DEBUG_PRINT("ERRO AO ENVIAR PACOTE\n");
 		return 0;
 	}
     return 1;
+}
+
+int getFileSize(char *path) {
+    struct stat attr;
+    stat(path, &attr);
+    return attr.st_size;
 }
