@@ -2,14 +2,13 @@
 #include "../include/dropboxClient.h"
 
 int main(int argc, char *argv[]) {
-    int sockfd, n;
-	unsigned int length;
-	struct sockaddr_in serv_addr, from;
+    int sockfd, port;
+	struct sockaddr_in serv_addr;
 	struct hostent *server;
-	char buffer[256];
 	char folder[256];
 	char user[USER_NAME_SIZE];
 	Connection *connection = malloc(sizeof(*connection));
+
 
 	DEBUG_PRINT("OPÇÃO DE DEBUG ATIVADA\n");
 
@@ -27,7 +26,7 @@ int main(int argc, char *argv[]) {
     if (strlen(argv[1]) <= USER_NAME_SIZE) {
         strcpy(user, argv[1]);
         strcpy(folder, getUserHome());
-        strcat(folder, "/dropbox_dir_");
+        strcat(folder, "/sync_dir_");
         strcat(folder, user);
     } else {
         printf("O tamanho máximo para o novo usuário é %d", USER_NAME_SIZE);
@@ -48,7 +47,9 @@ int main(int argc, char *argv[]) {
 	connection->socket = sockfd;
     connection->adress = &serv_addr;
 
-	length = sizeof(struct sockaddr_in);
+    port = firstConnection(user, folder, connection);
+
+    selectCommand();
 
 	// continuar
 
@@ -57,15 +58,56 @@ int main(int argc, char *argv[]) {
 	return SUCCESS;
 }
 
+void selectCommand() {
+
+    char command[11 + MAX_PATH];
+    char command_left[20], command_right[100];
+    char *valid;
+
+    printf("\n\nEscolha uma opção:\n\nupload <file>\ndownload <file>\ndelete <file>\nlist_server\nlist_client\nexit\n\n");
+
+    do {
+        printf("\nDigite seu comando: ");
+
+        valid = fgets(command, sizeof(command)-1, stdin);
+        if(valid != NULL) {
+            command[strcspn(command, "\r\n")] = 0;
+        }
+
+        // outras verificações para validar o comando
+
+        if(strcmp(command, CMD_EXIT) != 0) {
+            //processar comando
+        }
+    } while (strcmp(command, CMD_EXIT) != 0);
+}
+
 int firstConnection(char *user, char *folder, Connection *connection) {
-    Package *package;
-    char data[DATA_SEGMENT_SIZE];
-    bzero(data, DATA_SEGMENT_SIZE);
-    data[0] = CMD_CONNECT;
-    package = newPackage(CMD, user, 0, 0, data);
-    sendPackage(package, connection);
+    unsigned int length;
+    struct sockaddr_in from;
+    char buffer[256];
+    int port, n;
+
+    strcpy(buffer, user);
+
+    n = sendto(connection->socket, buffer, strlen(buffer), 0, (const struct sockaddr *) connection->adress, sizeof(struct sockaddr_in));
+	if (n < 0)
+		printf("ERROR sendto");
+
+	length = sizeof(struct sockaddr_in);
+
+	n = recvfrom(connection->socket, buffer, strlen(buffer), 0, (struct sockaddr *) &from, &length);
+
+	if (n < 0)
+		printf("ERROR recvfrom");
+
+    port = atoi(buffer);
+
+    DEBUG_PRINT("PORTA RECEBIDA: %d\n", port);
+
+
     // continuar
-    return SUCCESS;
+    return port;
 }
 
 void sendFile(char *file, Connection *connection) {

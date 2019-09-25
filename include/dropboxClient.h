@@ -12,3 +12,6 @@
 
 
 void sendFile(char *file, Connection *connection);
+void testeMensagens(int port, char *user);
+void selectCommand();
+int firstConnection(char *user, char *folder, Connection *connection);

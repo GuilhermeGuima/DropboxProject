@@ -13,6 +13,7 @@
 #include <unistd.h>
 #include <math.h>
 #include <pwd.h>
+#include <pthread.h>
 
 #include "definitions.h"
 
@@ -42,3 +43,4 @@ Package* newPackage(unsigned short int type, char* user, unsigned short int seq,
 int sendPackage(Package *package, Connection *connection);
 int getFileSize(char *path);
 char* getUserHome();
+char* itoa(int i, char b[]);
