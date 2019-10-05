@@ -49,9 +49,11 @@ int main(int argc, char *argv[]) {
 
     port = firstConnection(user, folder, connection);
 
-    selectCommand();
+    if (port > 0) {
 
-	// continuar
+        selectCommand();
+        // continuar
+    }
 
 	close(sockfd);
 
@@ -79,7 +81,7 @@ void selectCommand() {
         if(strcmp(command, CMD_EXIT) != 0) {
             //processar comando
         }
-    } while (strcmp(command, CMD_EXIT) != 0);
+    } while ( strcmp(command, CMD_EXIT) != 0 );
 }
 
 int firstConnection(char *user, char *folder, Connection *connection) {
@@ -100,6 +102,11 @@ int firstConnection(char *user, char *folder, Connection *connection) {
 
 	if (n < 0)
 		printf("ERROR recvfrom");
+
+    if (strcmp(buffer, ACCESS_ERROR)) {
+        DEBUG_PRINT("O SERVIDOR NÃO APROVOU A CONEXÃO");
+        return -1;
+    }
 
     port = atoi(buffer);
 

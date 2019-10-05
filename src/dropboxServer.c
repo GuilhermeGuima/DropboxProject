@@ -1,6 +1,8 @@
 #include "../include/dropboxUtil.h"
 #include "../include/dropboxServer.h"
 
+ClientList *client_list;
+
 int main(int argc, char *argv[]) {
 	int sockfd, n;
 	int port_count;
@@ -8,8 +10,11 @@ int main(int argc, char *argv[]) {
 	socklen_t clilen;
 	struct sockaddr_in serv_addr, cli_addr;
 	Package *package = malloc(sizeof(*package));
-	Client *client;
 	pthread_t th1;
+	Client *client;
+
+	initializeClientList();
+
 
 	DEBUG_PRINT("OPÇÃO DE DEBUG ATIVADA\n");
 
@@ -29,9 +34,7 @@ int main(int argc, char *argv[]) {
 	port_count = PORT;
 
 	while (TRUE) {
-
         printf("Esperando conexões de novos clientes\n");
-
 
 		n = recvfrom(sockfd, buffer, strlen(buffer), 0, (struct sockaddr *) &cli_addr, &clilen);
 		if (n < 0)
@@ -43,12 +46,17 @@ int main(int argc, char *argv[]) {
 		itoa(port_count, buffer);
 		printf("%s\n", buffer);
 
+		if (approveClient(client, client_list)) {
+            pthread_create(&th1, NULL, clientThread, (void*) client);
+        } else {
+            DEBUG_PRINT("O CLIENTE NÃO FOI APROVADO PARA ACESSAR A LISTA");
+            strcpy(buffer, ACCESS_ERROR);
+            port_count--;
+        }
+
 		n = sendto(sockfd, buffer, strlen(buffer), 0, (struct sockaddr *) &cli_addr, sizeof(struct sockaddr));
 		if (n < 0)
 			printf("ERROR on sendto");
-
-        pthread_create(&th1, NULL, clientThread, (void*) client);
-
 	}
 
 	close(sockfd);
@@ -65,6 +73,8 @@ void *clientThread(void *arg) {
 
 	DEBUG_PRINT("Porta %d\n", client->port);
 
+	client_list = addClient(client, client_list);
+
     if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) == -1)
 		printf("ERROR opening socket");
 
@@ -78,7 +88,7 @@ void *clientThread(void *arg) {
 
     clilen = sizeof(struct sockaddr_in);
 
-    while (1) {
+    while (TRUE) {
 
         sleep(2);
 
@@ -91,14 +101,86 @@ void *clientThread(void *arg) {
 Client* newClient(char* username, int port) {
 
     Client *client = malloc(sizeof(*client));
-	client->devices[0] = 1;
-	client->devices[1] = 0;
-	client->logged = 1;
+	client->logged = 0;
 	strcpy(client->username , username);
     client->port = port;
-
     return client;
 }
 
+void initializeClientList() {
+    client_list = NULL;
+}
 
+int approveClient(Client* client, ClientList* client_list) {
+    int result = 0;
+    ClientList *current = client_list;
 
+    while(current != NULL) {
+        if (strcmp(current->client->username, client->username) == 0) {
+            result++;
+            if (current->client->port == client->port) {
+                return FALSE;
+            }
+        }
+        current = current->next;
+    }
+
+    if (result >= 2) {
+        return FALSE;
+    }
+
+    return TRUE;
+
+}
+
+ClientList* addClient(Client* client, ClientList* client_list) {
+    ClientList *current = client_list;
+    ClientList *new_client = malloc(sizeof(ClientList));
+
+    new_client->client = client;
+    new_client->next = NULL;
+
+    if (client_list == NULL) {
+        client_list = new_client;
+        return client_list;
+    }
+
+    while(current->next != NULL) {
+        current = current->next;
+    }
+
+    current->next = new_client;
+    return client_list;
+}
+
+ClientList* removeClient(Client* client, ClientList* client_list) {
+    ClientList *current = client_list;
+    ClientList *prev_client = NULL;
+
+    while(current != NULL) {
+        if (strcmp(current->client->username, client->username) == 0) {
+            if (current->client->port == client->port ) {
+                if (prev_client != NULL) {
+                    prev_client->next = current->next;
+                } else {
+                    client_list = current->next;
+                }
+            }
+        }
+        prev_client = current;
+        current = current->next;
+    }
+
+    return client_list;
+}
+
+void printListClient(ClientList* client_list) {
+    int index = 1;
+    ClientList *current = client_list;
+
+    while(current != NULL) {
+        printf("%d - %s\n", index, current->client->username);
+        current = current->next;
+        index++;
+    }
+}

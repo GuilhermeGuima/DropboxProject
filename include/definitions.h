@@ -12,6 +12,10 @@
 #define MAX_PATH 256
 #define MAX_FILES 20
 
+//Strings
+
+#define ACCESS_ERROR "access_error"
+
 //Constants
 
 #define TRUE 1

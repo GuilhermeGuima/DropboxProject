@@ -11,7 +11,6 @@
 
 typedef struct client {
   char username[USER_NAME_SIZE];
-  int devices[2];
   int logged;
   int port;
 } Client;
@@ -23,3 +22,8 @@ typedef struct client_list {
 
 void *clientThread(void *arg);
 Client* newClient(char* username, int port);
+void initializeClientList();
+int approveClient(Client* client, ClientList* client_list);
+ClientList* addClient(Client* client, ClientList* client_list);
+ClientList* removeClient(Client* client, ClientList* client_list);
+void printListClient(ClientList* client_list);
