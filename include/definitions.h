@@ -23,13 +23,23 @@
 #define SUCCESS 1
 #define FAILURE 0
 
-//Comands
+//Commands
 
-#define CMD_UPLOAD "upload"
-#define CMD_DOWNLOAD "download"
-#define CMD_DELETE "delete"
+#define CMD_UPLOAD "upload "
+#define CMD_DOWNLOAD "download "
+#define CMD_DELETE "delete "
 #define CMD_LISTSERVER "list_server"
 #define CMD_LISTCLIENT "list_client"
 #define CMD_GETSYNCDIR "get_sync_dir"
 #define CMD_EXIT "exit"
 #define CMD_CONNECT "connect"
+
+//Commands Length
+
+#define CMD_UPLOAD_LEN 7
+#define CMD_DOWNLOAD_LEN 9
+#define CMD_DELETE_LEN 7
+#define CMD_LISTSERVER_LEN 11
+#define CMD_LISTCLIENT_LEN 11
+#define CMD_GETSYNCDIR_LEN 12
+

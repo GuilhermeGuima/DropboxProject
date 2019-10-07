@@ -18,7 +18,7 @@ int main(int argc, char *argv[]) {
 
 	DEBUG_PRINT("OPÇÃO DE DEBUG ATIVADA\n");
 
-    if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) == -1)
+	if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) == -1)
 		printf("ERROR opening socket");
 
 	serv_addr.sin_family = AF_INET;
@@ -34,25 +34,25 @@ int main(int argc, char *argv[]) {
 	port_count = PORT;
 
 	while (TRUE) {
-        printf("Esperando conexões de novos clientes\n");
+		printf("Esperando conexões de novos clientes\n");
 
 		n = recvfrom(sockfd, buffer, strlen(buffer), 0, (struct sockaddr *) &cli_addr, &clilen);
 		if (n < 0)
 			printf("ERROR on recvfrom");
 
-        port_count++;
-        client = newClient(buffer, port_count);
+		port_count++;
+		client = newClient(buffer, port_count);
 		bzero(buffer, 256);
 		itoa(port_count, buffer);
 		printf("%s\n", buffer);
 
 		if (approveClient(client, client_list)) {
-            pthread_create(&th1, NULL, clientThread, (void*) client);
-        } else {
-            DEBUG_PRINT("O CLIENTE NÃO FOI APROVADO PARA ACESSAR A LISTA");
-            strcpy(buffer, ACCESS_ERROR);
-            port_count--;
-        }
+			pthread_create(&th1, NULL, clientThread, (void*) client);
+		} else {
+			DEBUG_PRINT("O CLIENTE NÃO FOI APROVADO PARA ACESSAR A LISTA");
+			strcpy(buffer, ACCESS_ERROR);
+			port_count--;
+		}
 
 		n = sendto(sockfd, buffer, strlen(buffer), 0, (struct sockaddr *) &cli_addr, sizeof(struct sockaddr));
 		if (n < 0)
@@ -64,9 +64,9 @@ int main(int argc, char *argv[]) {
 }
 
 void *clientThread(void *arg) {
-    Client *client = (Client*) arg;
-    int sockfd, n;
-    char buffer[256];
+	Client *client = (Client*) arg;
+	int sockfd, n;
+	char buffer[256];
 	socklen_t clilen;
 	struct sockaddr_in serv_addr, cli_addr;
 	Package *package = malloc(sizeof(*package));
@@ -75,7 +75,7 @@ void *clientThread(void *arg) {
 
 	client_list = addClient(client, client_list);
 
-    if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) == -1)
+	if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) == -1)
 		printf("ERROR opening socket");
 
 	serv_addr.sin_family = AF_INET;
@@ -86,29 +86,26 @@ void *clientThread(void *arg) {
 	if (bind(sockfd, (struct sockaddr *) &serv_addr, sizeof(struct sockaddr)) < 0)
 		printf("ERROR on binding");
 
-    clilen = sizeof(struct sockaddr_in);
+	clilen = sizeof(struct sockaddr_in);
 
-    while (TRUE) {
+	while (TRUE) {
+		sleep(2);
 
-        sleep(2);
-
-        DEBUG_PRINT("ENTROU NO WHILE DA CLIENT THREAD\n");
-        DEBUG_PRINT("PORTA DO CLIENTE %d\n", client->port);
-
+		DEBUG_PRINT("ENTROU NO WHILE DA CLIENT THREAD\n");
+		DEBUG_PRINT("PORTA DO CLIENTE %d\n", client->port);
 	}
 }
 
 Client* newClient(char* username, int port) {
-
-    Client *client = malloc(sizeof(*client));
+	Client *client = malloc(sizeof(*client));
 	client->logged = 0;
 	strcpy(client->username , username);
-    client->port = port;
-    return client;
+	client->port = port;
+	return client;
 }
 
 void initializeClientList() {
-    client_list = NULL;
+	client_list = NULL;
 }
 
 int approveClient(Client* client, ClientList* client_list) {
@@ -184,3 +181,4 @@ void printListClient(ClientList* client_list) {
         index++;
     }
 }
+

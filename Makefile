@@ -21,3 +21,4 @@ clean:
 	rm -f $(DST_DIR)*.*
 	rm -f $(BIN_DIR)*.*
 	@echo "Every clear"
+

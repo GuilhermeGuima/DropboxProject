@@ -27,3 +27,4 @@ int approveClient(Client* client, ClientList* client_list);
 ClientList* addClient(Client* client, ClientList* client_list);
 ClientList* removeClient(Client* client, ClientList* client_list);
 void printListClient(ClientList* client_list);
+

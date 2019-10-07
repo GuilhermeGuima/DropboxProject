@@ -2,42 +2,42 @@
 #include "../include/dropboxClient.h"
 
 int main(int argc, char *argv[]) {
-    int sockfd, port;
+	int sockfd, port;
 	struct sockaddr_in serv_addr;
 	struct hostent *server;
 	char folder[256];
 	char user[USER_NAME_SIZE];
 	Connection *connection = malloc(sizeof(*connection));
 
-
 	DEBUG_PRINT("OPÇÃO DE DEBUG ATIVADA\n");
 
 	if (argc < 3) {
-        printf("Falta de argumentos ./dropboxClient user endereço");
-        return FAILURE;
-    }
+		printf("Falta de argumentos ./dropboxClient user endereço\n");
+		return FAILURE;
+	}
 
 	server = gethostbyname(argv[2]);
+
 	if (server == NULL) {
-        fprintf(stderr,"ERROR, no such host\n");
-        return FAILURE;
-    }
+		fprintf(stderr,"ERROR, no such host\n");
+		return FAILURE;
+	}
 
-    if (strlen(argv[1]) <= USER_NAME_SIZE) {
-        strcpy(user, argv[1]);
-        strcpy(folder, getUserHome());
-        strcat(folder, "/sync_dir_");
-        strcat(folder, user);
-    } else {
-        printf("O tamanho máximo para o novo usuário é %d", USER_NAME_SIZE);
-        return FAILURE;
-    }
+	if (strlen(argv[1]) <= USER_NAME_SIZE) {
+		strcpy(user, argv[1]);
+		strcpy(folder, getUserHome());
+		strcat(folder, "/sync_dir_");
+		strcat(folder, user);
+	} else {
+		printf("O tamanho máximo para o novo usuário é %d\n", USER_NAME_SIZE);
+		return FAILURE;
+	}
 
-    DEBUG_PRINT("User: %s\n", user);
-    DEBUG_PRINT("Folder: %s\n", folder);
+	DEBUG_PRINT("User: %s\n", user);
+	DEBUG_PRINT("Folder: %s\n", folder);
 
 	if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) == -1)
-		printf("ERROR opening socket");
+		printf("ERROR opening socket\n");
 
 	serv_addr.sin_family = AF_INET;
 	serv_addr.sin_port = htons(PORT);
@@ -45,15 +45,14 @@ int main(int argc, char *argv[]) {
 	bzero(&(serv_addr.sin_zero), 8);
 
 	connection->socket = sockfd;
-    connection->adress = &serv_addr;
+	connection->adress = &serv_addr;
 
-    port = firstConnection(user, folder, connection);
+	port = firstConnection(user, folder, connection);
 
-    if (port > 0) {
-
-        selectCommand();
-        // continuar
-    }
+	if (port > 0) {
+		selectCommand();
+		// continuar
+	}
 
 	close(sockfd);
 
@@ -61,27 +60,76 @@ int main(int argc, char *argv[]) {
 }
 
 void selectCommand() {
+	char command[12 + MAX_PATH];
+	char path[MAX_PATH];
+	char *valid;
 
-    char command[11 + MAX_PATH];
-    char command_left[20], command_right[100];
-    char *valid;
+	printf("\n\nComandos disponíveis:\n\nupload <file>\ndownload <file>\ndelete <file>\nlist_server\nlist_client\nexit\n\n");
 
-    printf("\n\nEscolha uma opção:\n\nupload <file>\ndownload <file>\ndelete <file>\nlist_server\nlist_client\nexit\n\n");
+	do {
+		printf("\nDigite seu comando: ");
 
-    do {
-        printf("\nDigite seu comando: ");
+		valid = fgets(command, sizeof(command)-1, stdin);
+		if(valid != NULL) {
+			command[strcspn(command, "\r\n")] = 0;
+		}
 
-        valid = fgets(command, sizeof(command)-1, stdin);
-        if(valid != NULL) {
-            command[strcspn(command, "\r\n")] = 0;
-        }
+		DEBUG_PRINT("Comando digitado: %s\n", command);
 
-        // outras verificações para validar o comando
+		if(strncmp(command, CMD_UPLOAD, CMD_UPLOAD_LEN) == 0) {
+			DEBUG_PRINT("Detectado comando upload\n");
 
-        if(strcmp(command, CMD_EXIT) != 0) {
-            //processar comando
-        }
-    } while ( strcmp(command, CMD_EXIT) != 0 );
+			strcpy(path, command+CMD_UPLOAD_LEN);
+			DEBUG_PRINT("Parâmetro do upload: %s\n", path);
+
+			if(uploadFile(path)) {
+				printf("Feito upload do arquivo com sucesso.\n");
+			} else {
+				printf("Falha ao fazer upload do arquivo. Por favor, tente novamente.\n");
+			}
+		} else if(strncmp(command, CMD_DOWNLOAD, CMD_DOWNLOAD_LEN) == 0) {
+			DEBUG_PRINT("Detectado comando download\n");
+
+			strcpy(path, command+CMD_DOWNLOAD_LEN);
+			DEBUG_PRINT("Parâmetro do download: %s\n", path);
+
+			if(downloadFile(path)) {
+				printf("Feito download do arquivo com sucesso.\n");
+			} else {
+				printf("Falha ao fazer download do arquivo. Por favor, tente novamente.\n");
+			}
+		} else if(strncmp(command, CMD_DELETE, CMD_DELETE_LEN) == 0) {
+			DEBUG_PRINT("Detectado comando delete\n");
+
+			strcpy(path, command+CMD_DELETE_LEN);
+			DEBUG_PRINT("Parâmetro do delete: %s\n", path);
+
+			if(deleteFile(path)) {
+				printf("Arquivo deletado com sucesso.\n");
+			} else {
+				printf("Falha ao tentar deletar o arquivo. Por favor, tente novamente.\n");
+			}
+		} else if(strncmp(command, CMD_LISTSERVER, CMD_LISTSERVER_LEN) == 0) {
+			DEBUG_PRINT("Detectado comando list_server\n");
+
+			printf("%s\n", listServer());
+		} else if(strncmp(command, CMD_LISTCLIENT, CMD_LISTCLIENT_LEN) == 0) {
+			DEBUG_PRINT("Detectado comando list_client\n");
+
+			printf("%s\n", listClient());
+		} else if(strncmp(command, CMD_GETSYNCDIR, CMD_GETSYNCDIR_LEN) == 0) {
+			DEBUG_PRINT("Detectado comando get_sync_dir\n");
+
+			if(getSyncDir()) {
+				printf("Diretório sync_dir sincronizado com sucesso.\n");
+			} else {
+				printf("Falha ao tentar sincronizar o diretório sync_dir. Por favor, tente novamente.\n");
+			}
+		} else {
+			printf("Comando não reconhecido, insira um comando válido e atente para espaços.\n\n");
+			printf("\n\nComandos disponíveis:\n\nupload <file>\ndownload <file>\ndelete <file>\nlist_server\nlist_client\nexit\n\n");
+		}
+	} while ( strcmp(command, CMD_EXIT) != 0 );
 }
 
 int firstConnection(char *user, char *folder, Connection *connection) {
@@ -93,25 +141,24 @@ int firstConnection(char *user, char *folder, Connection *connection) {
     strcpy(buffer, user);
 
     n = sendto(connection->socket, buffer, strlen(buffer), 0, (const struct sockaddr *) connection->adress, sizeof(struct sockaddr_in));
-	if (n < 0)
-		printf("ERROR sendto");
+    if (n < 0)
+        printf("ERROR sendto\n");
 
-	length = sizeof(struct sockaddr_in);
+    length = sizeof(struct sockaddr_in);
 
-	n = recvfrom(connection->socket, buffer, strlen(buffer), 0, (struct sockaddr *) &from, &length);
+    n = recvfrom(connection->socket, buffer, strlen(buffer), 0, (struct sockaddr *) &from, &length);
 
-	if (n < 0)
-		printf("ERROR recvfrom");
+    if (n < 0)
+        printf("ERROR recvfrom\n");
 
     if (strcmp(buffer, ACCESS_ERROR)) {
-        DEBUG_PRINT("O SERVIDOR NÃO APROVOU A CONEXÃO");
+        DEBUG_PRINT("O SERVIDOR NÃO APROVOU A CONEXÃO\n");
         return -1;
     }
 
     port = atoi(buffer);
 
     DEBUG_PRINT("PORTA RECEBIDA: %d\n", port);
-
 
     // continuar
     return port;
@@ -148,3 +195,30 @@ void sendFile(char *file, Connection *connection) {
         fclose(pFile);
     }
 }
+
+int uploadFile(char *file_path) {
+	return FAILURE;
+}
+
+int downloadFile(char *file_path) {
+	return FAILURE;
+}
+
+int deleteFile(char *file_path) {
+	return FAILURE;
+}
+
+const char* listServer() {
+	const char* response = "Função a ser implementada";
+	return response;
+}
+
+const char* listClient() {
+	const char* response = "Função a ser implementada";
+	return response;
+}
+
+int getSyncDir() {
+	return FAILURE;
+}
+
