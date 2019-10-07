@@ -151,7 +151,7 @@ int firstConnection(char *user, char *folder, Connection *connection) {
     if (n < 0)
         printf("ERROR recvfrom\n");
 
-    if (strcmp(buffer, ACCESS_ERROR)) {
+    if (strcmp(buffer, ACCESS_ERROR) == 0) {
         DEBUG_PRINT("O SERVIDOR NÃO APROVOU A CONEXÃO\n");
         return -1;
     }
