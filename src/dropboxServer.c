@@ -4,14 +4,14 @@
 ClientList *client_list;
 
 int main(int argc, char *argv[]) {
-	int sockfd, n;
+	int sockfd;
 	int port_count;
-	char buffer[256];
-	socklen_t clilen;
-	struct sockaddr_in serv_addr, cli_addr;
-	Package *package = malloc(sizeof(*package));
+	struct sockaddr_in serv_addr;
+	Package *buffer = malloc(sizeof(Package));
+	char portMapper[DATA_SEGMENT_SIZE];
 	pthread_t th1;
 	Client *client;
+	int seqnumSend = 0, seqnumReceive = 0;
 
 	initializeClientList();
 
@@ -29,34 +29,43 @@ int main(int argc, char *argv[]) {
 	if (bind(sockfd, (struct sockaddr *) &serv_addr, sizeof(struct sockaddr)) < 0)
 		printf("ERROR on binding");
 
-	clilen = sizeof(struct sockaddr_in);
-
 	port_count = PORT;
+
+	Connection connection;
+	connection.address = &serv_addr;
+	connection.socket = sockfd;
 
 	while (TRUE) {
 		printf("Esperando conexões de novos clientes\n");
+		seqnumReceive = 0; seqnumSend = 0;
 
-		n = recvfrom(sockfd, buffer, 256, 0, (struct sockaddr *) &cli_addr, &clilen);
+		receivePackage(&connection, buffer, seqnumReceive);
+		seqnumReceive = 1 - seqnumReceive;
+		/*n = recvfrom(sockfd, buffer, 256, 0, (struct sockaddr *) &cli_addr, &clilen);
 		if (n < 0)
-			printf("ERROR on recvfrom");
+			printf("ERROR on recvfrom");*/
 
 		port_count++;
-		client = newClient(buffer, port_count);
-		bzero(buffer, 256);
-		itoa(port_count, buffer);
-		printf("%s\n", buffer);
+		client = newClient(buffer->data, port_count);
+		bzero(portMapper, DATA_SEGMENT_SIZE);
+		itoa(port_count, portMapper);
 
 		if (approveClient(client, client_list)) {
 			pthread_create(&th1, NULL, clientThread, (void*) client);
 		} else {
 			DEBUG_PRINT("O CLIENTE NÃO FOI APROVADO PARA ACESSAR A LISTA");
-			strcpy(buffer, ACCESS_ERROR);
+			strcpy(portMapper, ACCESS_ERROR);
 			port_count--;
 		}
 
+		Package *p = newPackage(CMD,client->username,seqnumSend,0,portMapper);
+		sendPackage(p,&connection);
+		seqnumSend = 1 - seqnumSend;
+		/*
 		n = sendto(sockfd, buffer, strlen(buffer), 0, (struct sockaddr *) &cli_addr, sizeof(struct sockaddr));
 		if (n < 0)
 			printf("ERROR on sendto");
+		*/
 	}
 
 	close(sockfd);

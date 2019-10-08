@@ -81,7 +81,7 @@ int sendPackage(Package *package, Connection *connection){
 
 int receivePackage(Connection *connection, Package *buffer, int expectedSeq){
     unsigned int length, n;
-    struct sockaddr_in from;
+    struct sockaddr_in *from = malloc(sizeof(struct sockaddr_in));
     Package *package = malloc(PACKAGE_SIZE);
 
     length = sizeof(struct sockaddr_in);
@@ -89,7 +89,7 @@ int receivePackage(Connection *connection, Package *buffer, int expectedSeq){
     // blocking call
     while(1){
         DEBUG_PRINT("RECEBENDO PACOTE %d\n", expectedSeq);
-        if(recvfrom(connection->socket, buffer, PACKAGE_SIZE, 0, (struct sockaddr *) &from, &length) < 0){
+        if(recvfrom(connection->socket, buffer, PACKAGE_SIZE, 0, (struct sockaddr *) from, &length) < 0){
             fprintf(stderr, "ERRO NO RECEBIMENTO DE PACOTE");
         }else{
             if(buffer->seq == expectedSeq){
@@ -97,7 +97,7 @@ int receivePackage(Connection *connection, Package *buffer, int expectedSeq){
                 // send ACK package
                 package->type = ACK;
                 package->seq = expectedSeq;
-                n = sendto(connection->socket, package, PACKAGE_SIZE, 0, (const struct sockaddr *) &from, sizeof(struct sockaddr_in));
+                n = sendto(connection->socket, package, PACKAGE_SIZE, 0, (const struct sockaddr *) from, sizeof(struct sockaddr_in));
 
                 if (n < 0) {
                     DEBUG_PRINT("ERRO AO ENVIAR PACOTE DE ACK\n");
@@ -110,10 +110,12 @@ int receivePackage(Connection *connection, Package *buffer, int expectedSeq){
                 DEBUG_PRINT("RE-ENVIANDO PACOTE DE ACK %d, SEQ RECEBIDA %d\n", expectedSeq, buffer->seq);
                 package->type = ACK;
                 package->seq = expectedSeq;
-                n = sendto(connection->socket, package, PACKAGE_SIZE, 0, (const struct sockaddr *) connection->address, sizeof(struct sockaddr_in));
+                n = sendto(connection->socket, package, PACKAGE_SIZE, 0, (const struct sockaddr *) &from, sizeof(struct sockaddr_in));
             }
         }
     }
+
+    connection->address = from;
 
     free(package);
     return SUCCESS;

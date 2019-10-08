@@ -5,7 +5,7 @@ struct hostent *server;
 char folder[MAX_PATH];
 Connection *connection;
 char user[USER_NAME_SIZE];
-int seqnum = 0;
+int seqnum = 0, seqnumReceive = 0;
 
 int main(int argc, char *argv[]) {
 	int port;
@@ -83,6 +83,7 @@ void selectCommand() {
 	char command[12 + MAX_PATH];
 	char path[MAX_PATH];
 	char *valid;
+	seqnum = 0; // resets because new socket has been created on server-side
 
 	sleep(1);
 	printf("\n\nComandos disponíveis:\n\nupload <file>\ndownload <file>\ndelete <file>\nlist_server\nlist_client\nexit\n\n");
@@ -161,30 +162,34 @@ void closeConnection(){
 }
 
 int firstConnection(char *user, Connection *connection) {
-    unsigned int length;
-    struct sockaddr_in from;
     char buffer[256];
-    int port, n;
+    int port;
 
     strcpy(buffer, user);
 
+    Package *p = newPackage(CMD, user, seqnum, 0, buffer);
+    sendPackage(p, connection);
+    seqnum = 1 - seqnum;
+    /*
     n = sendto(connection->socket, buffer, 256, 0, (const struct sockaddr *) connection->address, sizeof(struct sockaddr_in));
     if (n < 0)
         printf("ERROR sendto\n");
+    */
 
-    length = sizeof(struct sockaddr_in);
-
+    receivePackage(connection, p, seqnumReceive);
+    seqnumReceive = 1 - seqnumReceive;
+    /*
     n = recvfrom(connection->socket, buffer, 256, 0, (struct sockaddr *) &from, &length);
 
     if (n < 0)
-        printf("ERROR recvfrom\n");
+        printf("ERROR recvfrom\n"); */
 
-    if (strcmp(buffer, ACCESS_ERROR) == 0) {
+    if (strcmp(p->data, ACCESS_ERROR) == 0) {
         DEBUG_PRINT("O SERVIDOR NÃO APROVOU A CONEXÃO\n");
         return -1;
     }
 
-    port = atoi(buffer);
+    port = atoi(p->data);
 
     DEBUG_PRINT("PORTA RECEBIDA: %d\n", port);
 
