@@ -119,12 +119,12 @@ int receivePackage(Connection *connection, Package *buffer, int expectedSeq){
     return SUCCESS;
 }
 
-void sendFile(char *file, Connection *connection) {
+void sendFile(char *file, Connection *connection, char* username) {
     FILE* pFile;
     Package *package;
     int file_size = 0;
     int total_send = 0;
-    unsigned short int seq = 0;
+    unsigned short int seq = SEQUENCE_SHIFT; // start at two to avoid clash with comands sequence
     unsigned short int length = 0;
     char data[DATA_SEGMENT_SIZE];
 
@@ -134,7 +134,6 @@ void sendFile(char *file, Connection *connection) {
         file_size = getFileSize(file);
 
         length = floor(file_size/DATA_SEGMENT_SIZE);
-        DEBUG_PRINT("TAMANHO DO ARQUIVO: %d\n", file_size);
         for ( total_send = 0 ; total_send < file_size ; total_send = total_send + DATA_SEGMENT_SIZE ) {
             bzero(data, DATA_SEGMENT_SIZE);
             if ( (file_size - total_send) < DATA_SEGMENT_SIZE ) {
@@ -143,29 +142,31 @@ void sendFile(char *file, Connection *connection) {
             else {
                 fread(data, sizeof(char), DATA_SEGMENT_SIZE, pFile);
             }
-
-            package = newPackage(CMD, "username", seq, length, data);
+            package = newPackage(DATA, username, seq, length, data);
             sendPackage(package, connection);
             seq++;
         }
         fclose(pFile);
+    }else{
+        fprintf(stderr, "Erro na abertura do arquivo %s\n",file);
     }
 }
 
-void receiveFile(Connection *connection, char* buffer, int *file_size){
+void receiveFile(Connection *connection, char** buffer, int *file_size){
     Package *package = malloc(sizeof(Package));
-    int seqFile = 0;
+    int seqFile = SEQUENCE_SHIFT;
+    int offset = 0;
     receivePackage(connection, package, seqFile);
-    buffer = malloc((package->length+1)*DATA_SEGMENT_SIZE);
+    *buffer = malloc((package->length+1)*DATA_SEGMENT_SIZE);
 
-
-    while(package->length != package->seq){
-        memcpy(buffer, package->data+package->seq*DATA_SEGMENT_SIZE, DATA_SEGMENT_SIZE);
+    while(package->length != package->seq-SEQUENCE_SHIFT){
+        memcpy(*buffer+offset, package->data, DATA_SEGMENT_SIZE);
         seqFile += 1;
         receivePackage(connection, package, seqFile);
+        offset = (package->seq-SEQUENCE_SHIFT)*DATA_SEGMENT_SIZE;
     }
     
-    memcpy(buffer, package->data+package->seq*DATA_SEGMENT_SIZE, strlen(package->data));
+    memcpy(*buffer+offset, package->data, DATA_SEGMENT_SIZE);
     *file_size = package->length*DATA_SEGMENT_SIZE+strlen(package->data);
     
     free(package);

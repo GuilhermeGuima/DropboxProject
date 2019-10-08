@@ -18,7 +18,6 @@
 #define EVENT_SIZE (sizeof(struct inotify_event))
 #define EVENT_BUF_LEN (1024*(EVENT_SIZE + 16))
 
-void sendFile(char *file, Connection *connection);
 void testeMensagens(int port, char *user);
 void selectCommand();
 int connectServer(char *user, struct hostent *server, Connection *connection);

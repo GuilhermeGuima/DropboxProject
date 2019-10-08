@@ -65,11 +65,9 @@ int main(int argc, char *argv[]) {
 
 void *clientThread(void *arg) {
 	Client *client = (Client*) arg;
-	int sockfd, n;
-	char buffer[256];
-	socklen_t clilen;
-	struct sockaddr_in serv_addr, cli_addr;
-	Package *package = malloc(sizeof(Package));
+	int sockfd, file_size;
+	char *buffer = NULL;
+	struct sockaddr_in serv_addr;
 	Connection *connection = malloc(sizeof(Connection));
 	int seqnum = 0;
 
@@ -88,8 +86,6 @@ void *clientThread(void *arg) {
 	if (bind(sockfd, (struct sockaddr *) &serv_addr, sizeof(struct sockaddr)) < 0)
 		printf("ERROR on binding");
 
-	clilen = sizeof(struct sockaddr_in);
-
 	connection->socket = sockfd;
 	connection->address = &serv_addr;
 
@@ -101,10 +97,14 @@ void *clientThread(void *arg) {
 
 		Package *request = malloc(sizeof(Package));
 		receivePackage(connection, request, seqnum);
+		seqnum = 1 - seqnum;
 
 		switch(request->type){
 			case UPLOAD:
 				printf("Uploading file %s for user %s\n",request->data,request->user);
+				receiveFile(connection, &buffer, &file_size);
+				printf("File: %s\n", buffer);
+				//saveFile(buffer, file_size);
 				break;
 			case DOWNLOAD:
 				printf("Sending file %s for user %s\n",request->data,request->user);
@@ -120,8 +120,6 @@ void *clientThread(void *arg) {
 				break;
 			default: printf("Invalid command number %d\n", request->type);
 		}
-
-		seqnum = 1 - seqnum;
 	}
 }
 

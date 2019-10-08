@@ -54,3 +54,6 @@ dkms.conf
 # Object files folder
 dst/
 bin/
+
+# Tests folder
+test/

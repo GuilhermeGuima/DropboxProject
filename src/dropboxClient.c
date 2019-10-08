@@ -197,7 +197,8 @@ int uploadFile(char *file_path) {
 	Package *commandPackage = newPackage(UPLOAD,user,seqnum,0,filename);
 	sendPackage(commandPackage, connection);
 	seqnum = 1 - seqnum;
-	//sendFile(file_path, connection);
+
+	sendFile(file_path, connection, user);
 
 	return SUCCESS;
 }

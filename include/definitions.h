@@ -53,4 +53,5 @@
 // Connection
 
 #define TIMEOUT 3 // in seconds
+#define SEQUENCE_SHIFT 2 //sequence number shift on data transmission
 
