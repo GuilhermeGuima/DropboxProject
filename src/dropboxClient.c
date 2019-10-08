@@ -277,13 +277,11 @@ void *sync_thread(){
 			if(event->len){
 				//TODO: put uploadFile here
 				if(event->mask & IN_CREATE || event->mask & IN_CLOSE_WRITE || event->mask & IN_MOVED_TO){
-					if(event->mask & IN_ISDIR) printf("Directory uploaded %s\n", event->name);
-					else printf("File uploaded %s\n", event->name);
+					if(! event->mask & IN_ISDIR) printf("File uploaded %s\n", event->name);
 				}
 				//TODO: deleteFile here
 				if(event->mask & IN_DELETE || event->mask & IN_MOVED_FROM){
-					if(event->mask & IN_ISDIR) printf("Directory deleted %s\n", event->name);
-					else printf("File deleted %s\n", event->name);
+					if(! event->mask & IN_ISDIR) printf("File deleted %s\n", event->name);
 				}
 			}
 			i += EVENT_SIZE + event->len;
