@@ -5,8 +5,8 @@ ClientList *client_list;
 
 int main(int argc, char *argv[]) {
 	int sockfd;
-	int port_count;
 	struct sockaddr_in serv_addr;
+	int *port_count = malloc(sizeof(int));
 	Package *buffer = malloc(sizeof(Package));
 	char portMapper[DATA_SEGMENT_SIZE];
 	pthread_t th1;
@@ -29,7 +29,7 @@ int main(int argc, char *argv[]) {
 	if (bind(sockfd, (struct sockaddr *) &serv_addr, sizeof(struct sockaddr)) < 0)
 		printf("ERROR on binding");
 
-	port_count = PORT;
+	*port_count = PORT;
 
 	Connection connection;
 	connection.address = &serv_addr;
@@ -41,31 +41,23 @@ int main(int argc, char *argv[]) {
 
 		receivePackage(&connection, buffer, seqnumReceive);
 		seqnumReceive = 1 - seqnumReceive;
-		/*n = recvfrom(sockfd, buffer, 256, 0, (struct sockaddr *) &cli_addr, &clilen);
-		if (n < 0)
-			printf("ERROR on recvfrom");*/
 
-		port_count++;
-		client = newClient(buffer->data, port_count);
+		*port_count = *port_count + 1;
+		client = newClient(buffer->data);
 		bzero(portMapper, DATA_SEGMENT_SIZE);
-		itoa(port_count, portMapper);
+		itoa(*port_count, portMapper);
 
-		if (approveClient(client, client_list)) {
-			pthread_create(&th1, NULL, clientThread, (void*) client);
+		if (approveClient(client, &client_list, *port_count)) {
+			pthread_create(&th1, NULL, clientThread, (void*) port_count);
 		} else {
-			DEBUG_PRINT("O CLIENTE NÃO FOI APROVADO PARA ACESSAR A LISTA");
+			DEBUG_PRINT("O CLIENTE JA ESTA USANDO DOIS DISPOSITIVOS\n");
 			strcpy(portMapper, ACCESS_ERROR);
-			port_count--;
+			*port_count = *port_count - 1;
 		}
 
 		Package *p = newPackage(CMD,client->username,seqnumSend,0,portMapper);
 		sendPackage(p,&connection);
 		seqnumSend = 1 - seqnumSend;
-		/*
-		n = sendto(sockfd, buffer, strlen(buffer), 0, (struct sockaddr *) &cli_addr, sizeof(struct sockaddr));
-		if (n < 0)
-			printf("ERROR on sendto");
-		*/
 	}
 
 	close(sockfd);
@@ -73,22 +65,20 @@ int main(int argc, char *argv[]) {
 }
 
 void *clientThread(void *arg) {
-	Client *client = (Client*) arg;
+	int port = *(int*) arg;
 	int sockfd, file_size;
 	char *buffer = NULL;
 	struct sockaddr_in serv_addr;
 	Connection *connection = malloc(sizeof(Connection));
 	int seqnum = 0;
 
-	DEBUG_PRINT("Porta %d\n", client->port);
-
-	client_list = addClient(client, client_list);
+	DEBUG_PRINT("Porta %d\n", port);
 
 	if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) == -1)
 		printf("ERROR opening socket");
 
 	serv_addr.sin_family = AF_INET;
-	serv_addr.sin_port = htons(client->port);
+	serv_addr.sin_port = htons(port);
 	serv_addr.sin_addr.s_addr = INADDR_ANY;
 	bzero(&(serv_addr.sin_zero), 8);
 
@@ -102,7 +92,7 @@ void *clientThread(void *arg) {
 		sleep(2);
 
 		DEBUG_PRINT("ENTROU NO WHILE DA CLIENT THREAD\n");
-		DEBUG_PRINT("PORTA DO CLIENTE %d\n", client->port);
+		DEBUG_PRINT("PORTA DO CLIENTE %d\n", port);
 
 		Package *request = malloc(sizeof(Package));
 		receivePackage(connection, request, seqnum);
@@ -131,11 +121,10 @@ void *clientThread(void *arg) {
 	}
 }
 
-Client* newClient(char* username, int port) {
+Client* newClient(char* username) {
 	Client *client = malloc(sizeof(*client));
-	client->logged = 0;
+	client->logged = TRUE;
 	strcpy(client->username , username);
-	client->port = port;
 	return client;
 }
 
@@ -143,26 +132,42 @@ void initializeClientList() {
 	client_list = NULL;
 }
 
-int approveClient(Client* client, ClientList* client_list) {
-    int result = 0;
-    ClientList *current = client_list;
+int approveClient(Client* client, ClientList** client_list, int port) {
+    ClientList *current = *client_list;
+    ClientList *last = *client_list;
 
-    while(current != NULL) {
+    while(current != NULL){
         if (strcmp(current->client->username, client->username) == 0) {
-            result++;
-            if (current->client->port == client->port) {
-                return FALSE;
+        	// both in use
+            if(current->client->devices[0] != INVALID && current->client->devices[1] != INVALID){
+            	return FALSE;
+            } else {
+            	DEBUG_PRINT("ADDED NEW DEVICE\n");
+            	//at least one is free
+            	if(current->client->devices[0] == INVALID) current->client->devices[0] = port;
+            	else current->client->devices[1] = port;
+            	return TRUE;
             }
         }
+        last = current;
         current = current->next;
     }
 
-    if (result >= 2) {
-        return FALSE;
-    }
+    // user isnt logged in yet
+  	ClientList *new_client = malloc(sizeof(ClientList));
+  	client->devices[0] = port;
+  	client->devices[1] = INVALID;
+  	new_client->client = client;
+  	new_client->next = NULL;
 
-    return TRUE;
+  	if(*client_list == NULL)
+  		//first element of list
+  		*client_list = new_client;
+  	else	
+  		last->next = new_client;
 
+  	DEBUG_PRINT("ADDED NEW CLIENT\n");
+  	return TRUE;
 }
 
 ClientList* addClient(Client* client, ClientList* client_list) {
@@ -191,13 +196,13 @@ ClientList* removeClient(Client* client, ClientList* client_list) {
 
     while(current != NULL) {
         if (strcmp(current->client->username, client->username) == 0) {
-            if (current->client->port == client->port ) {
+            //if (current->client->port == client->port ) {
                 if (prev_client != NULL) {
                     prev_client->next = current->next;
                 } else {
                     client_list = current->next;
                 }
-            }
+            //}
         }
         prev_client = current;
         current = current->next;
@@ -211,7 +216,8 @@ void printListClient(ClientList* client_list) {
     ClientList *current = client_list;
 
     while(current != NULL) {
-        printf("%d - %s\n", index, current->client->username);
+        printf("%d - %s - device1: %d - device2: %d\n", index, current->client->username,
+        	current->client->devices[0], current->client->devices[1]);
         current = current->next;
         index++;
     }

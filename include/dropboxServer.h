@@ -21,7 +21,6 @@ typedef struct client {
   int devices[2]; 	// socket ports for the two client sessions
   int logged;
   File_Meta files[MAX_FILES];
-  int port;			// delete when we start using devices
 } Client;
 
 typedef struct client_list {
@@ -30,9 +29,9 @@ typedef struct client_list {
 } ClientList;
 
 void *clientThread(void *arg);
-Client* newClient(char* username, int port);
+Client* newClient(char* username);
 void initializeClientList();
-int approveClient(Client* client, ClientList* client_list);
+int approveClient(Client* client, ClientList** client_list, int port);
 ClientList* addClient(Client* client, ClientList* client_list);
 ClientList* removeClient(Client* client, ClientList* client_list);
 void printListClient(ClientList* client_list);

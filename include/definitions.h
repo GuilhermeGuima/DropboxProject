@@ -29,6 +29,7 @@
 #define FALSE 0
 #define SUCCESS 1
 #define FAILURE 0
+#define INVALID -1
 
 //Commands
 

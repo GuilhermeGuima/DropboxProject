@@ -170,19 +170,9 @@ int firstConnection(char *user, Connection *connection) {
     Package *p = newPackage(CMD, user, seqnum, 0, buffer);
     sendPackage(p, connection);
     seqnum = 1 - seqnum;
-    /*
-    n = sendto(connection->socket, buffer, 256, 0, (const struct sockaddr *) connection->address, sizeof(struct sockaddr_in));
-    if (n < 0)
-        printf("ERROR sendto\n");
-    */
 
     receivePackage(connection, p, seqnumReceive);
     seqnumReceive = 1 - seqnumReceive;
-    /*
-    n = recvfrom(connection->socket, buffer, 256, 0, (struct sockaddr *) &from, &length);
-
-    if (n < 0)
-        printf("ERROR recvfrom\n"); */
 
     if (strcmp(p->data, ACCESS_ERROR) == 0) {
         DEBUG_PRINT("O SERVIDOR NÃO APROVOU A CONEXÃO\n");
