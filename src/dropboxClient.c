@@ -84,7 +84,7 @@ void selectCommand() {
 	char path[MAX_PATH];
 	char *valid;
 
-	sleep(2);
+	sleep(1);
 	printf("\n\nComandos disponíveis:\n\nupload <file>\ndownload <file>\ndelete <file>\nlist_server\nlist_client\nexit\n\n");
 
 	do {

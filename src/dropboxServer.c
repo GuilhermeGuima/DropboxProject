@@ -103,8 +103,7 @@ void *clientThread(void *arg) {
 			case UPLOAD:
 				printf("Uploading file %s for user %s\n",request->data,request->user);
 				receiveFile(connection, &buffer, &file_size);
-				printf("File: %s\n", buffer);
-				//saveFile(buffer, file_size);
+				saveFile(buffer, file_size, request->data, request->user);
 				break;
 			case DOWNLOAD:
 				printf("Sending file %s for user %s\n",request->data,request->user);

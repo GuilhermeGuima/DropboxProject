@@ -172,6 +172,42 @@ void receiveFile(Connection *connection, char** buffer, int *file_size){
     free(package);
 }
 
+void saveFile(char *buffer, int file_size, char *filename, char* user){
+
+    FILE *fp;
+    char path[MAX_FILE_NAME+USER_NAME_SIZE+1];
+    int bytes_written;
+
+    printf("file size: %d\n",file_size);
+
+    strcpy(path, user);
+    strcat(path, "/");
+    strcat(path, filename);
+
+    if(file_size != 0){
+        fp = fopen(path, "w");
+        if(fp == NULL){
+            fprintf(stderr, "Error while writing file %s\n", filename);
+            return;
+        }
+        
+        for ( bytes_written = 0 ; bytes_written < file_size ; bytes_written += DATA_SEGMENT_SIZE ) {
+            if ( (file_size - bytes_written) < DATA_SEGMENT_SIZE ) {
+                fwrite(buffer+bytes_written, sizeof(char), (file_size - bytes_written), fp);
+            }
+            else {
+                fwrite(buffer+bytes_written, sizeof(char), DATA_SEGMENT_SIZE, fp);
+            }
+        }
+
+        fclose(fp);
+    }else{
+        fprintf(stderr, "Erro na abertura do arquivo %s\n",filename);
+    }
+    //TODO: after writing the client list function, update user's files after one has been sent
+
+}
+
 int getFileSize(char *path) {
     struct stat attr;
     stat(path, &attr);

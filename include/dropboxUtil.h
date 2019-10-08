@@ -48,6 +48,7 @@ int sendPackage(Package *package, Connection *connection);
 int receivePackage(Connection *connection, Package *buffer, int expectedSeq);
 void receiveFile(Connection *connection, char** buffer, int *file_size);
 void sendFile(char *file, Connection *connection, char* username);
+void saveFile(char *buffer, int file_size, char *filename, char* user);
 void printPackage(Package *package);
 Package* newPackage(unsigned short int type, char* user, unsigned short int seq, unsigned short int length, char*data);
 int sendPackage(Package *package, Connection *connection);
