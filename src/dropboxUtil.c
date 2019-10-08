@@ -65,15 +65,16 @@ int sendPackage(Package *package, Connection *connection){
         if(recvfrom(connection->socket, ackBuffer, PACKAGE_SIZE, 0, (struct sockaddr *) &from, &length) < 0 ){
             DEBUG_PRINT("TIMEOUT NO ENVIO DO PACOTE\n");
         } else {
-            DEBUG_PRINT ("RECEBEU PACOTE ENQUANTO ESPERAVA POR ACK\n");
-            if(ackBuffer->type == ACK){
+            if(ackBuffer->type == ACK && ackBuffer->seq == package->seq){
                 notACKed = FALSE;
+            }else{
+                DEBUG_PRINT ("RECEBEU ACK %d FORA DE SEQUENCIA\n", ackBuffer->seq);
             }
         }
 
     } while(notACKed);
 
-    DEBUG_PRINT("RECEBEU ACK DO PACOTE\n");
+    DEBUG_PRINT("RECEBEU ACK %d DO PACOTE\n", ackBuffer->seq);
     free(ackBuffer);
     return SUCCESS;
 }
@@ -82,15 +83,20 @@ int receivePackage(Connection *connection, Package *buffer, int expectedSeq){
     unsigned int length, n;
     struct sockaddr_in from;
     Package *package = malloc(PACKAGE_SIZE);
+
+    length = sizeof(struct sockaddr_in);
     
     // blocking call
     while(1){
         DEBUG_PRINT("RECEBENDO PACOTE %d\n", expectedSeq);
-        if(recvfrom(connection->socket, buffer, PACKAGE_SIZE, 0, (struct sockaddr *) &from, &length) >= 0){
+        if(recvfrom(connection->socket, buffer, PACKAGE_SIZE, 0, (struct sockaddr *) &from, &length) < 0){
+            fprintf(stderr, "ERRO NO RECEBIMENTO DE PACOTE");
+        }else{
             if(buffer->seq == expectedSeq){
-                DEBUG_PRINT("MANDANDO PACOTE DE ACK\n");
+                DEBUG_PRINT("MANDANDO PACOTE DE ACK %d\n",expectedSeq);
                 // send ACK package
                 package->type = ACK;
+                package->seq = expectedSeq;
                 n = sendto(connection->socket, package, PACKAGE_SIZE, 0, (const struct sockaddr *) &from, sizeof(struct sockaddr_in));
 
                 if (n < 0) {
@@ -101,8 +107,9 @@ int receivePackage(Connection *connection, Package *buffer, int expectedSeq){
                 break;  // ACK has been sent
             } else {
                 // discard duplicate and resend ACK
-                DEBUG_PRINT("RE-ENVIANDO PACOTE DE ACK, SEQ RECEBIDA %d\n", buffer->seq);
+                DEBUG_PRINT("RE-ENVIANDO PACOTE DE ACK %d, SEQ RECEBIDA %d\n", expectedSeq, buffer->seq);
                 package->type = ACK;
+                package->seq = expectedSeq;
                 n = sendto(connection->socket, package, PACKAGE_SIZE, 0, (const struct sockaddr *) connection->address, sizeof(struct sockaddr_in));
             }
         }

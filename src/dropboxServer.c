@@ -36,7 +36,7 @@ int main(int argc, char *argv[]) {
 	while (TRUE) {
 		printf("Esperando conexões de novos clientes\n");
 
-		n = recvfrom(sockfd, buffer, strlen(buffer), 0, (struct sockaddr *) &cli_addr, &clilen);
+		n = recvfrom(sockfd, buffer, 256, 0, (struct sockaddr *) &cli_addr, &clilen);
 		if (n < 0)
 			printf("ERROR on recvfrom");
 

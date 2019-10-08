@@ -168,13 +168,13 @@ int firstConnection(char *user, Connection *connection) {
 
     strcpy(buffer, user);
 
-    n = sendto(connection->socket, buffer, strlen(buffer), 0, (const struct sockaddr *) connection->address, sizeof(struct sockaddr_in));
+    n = sendto(connection->socket, buffer, 256, 0, (const struct sockaddr *) connection->address, sizeof(struct sockaddr_in));
     if (n < 0)
         printf("ERROR sendto\n");
 
     length = sizeof(struct sockaddr_in);
 
-    n = recvfrom(connection->socket, buffer, strlen(buffer), 0, (struct sockaddr *) &from, &length);
+    n = recvfrom(connection->socket, buffer, 256, 0, (struct sockaddr *) &from, &length);
 
     if (n < 0)
         printf("ERROR recvfrom\n");
