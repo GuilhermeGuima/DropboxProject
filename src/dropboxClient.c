@@ -1,11 +1,13 @@
 #include "../include/dropboxUtil.h"
 #include "../include/dropboxClient.h"
 
+int notifyWatcher, notifyFile;
+char folder[256];
+
 int main(int argc, char *argv[]) {
 	int sockfd, port;
 	struct sockaddr_in serv_addr;
 	struct hostent *server;
-	char folder[256];
 	char user[USER_NAME_SIZE];
 	Connection *connection = malloc(sizeof(*connection));
 
@@ -37,7 +39,7 @@ int main(int argc, char *argv[]) {
 	DEBUG_PRINT("Folder: %s\n", folder);
 
 	if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) == -1)
-		printf("ERROR opening socket\n");
+		fprintf(stderr, "ERROR opening socket\n");
 
 	serv_addr.sin_family = AF_INET;
 	serv_addr.sin_port = htons(PORT);
@@ -47,14 +49,19 @@ int main(int argc, char *argv[]) {
 	connection->socket = sockfd;
 	connection->adress = &serv_addr;
 
-	port = firstConnection(user, folder, connection);
+	port = firstConnection(user, connection);
 
 	if (port > 0) {
+
+		getSyncDir();
+
 		selectCommand();
-		// continuar
 	}
 
 	close(sockfd);
+
+	inotify_rm_watch(notifyFile, notifyWatcher); // removes the directory from inotify watcher
+	close(notifyFile); //close inotify file
 
 	return SUCCESS;
 }
@@ -132,7 +139,7 @@ void selectCommand() {
 	} while ( strcmp(command, CMD_EXIT) != 0 );
 }
 
-int firstConnection(char *user, char *folder, Connection *connection) {
+int firstConnection(char *user, Connection *connection) {
     unsigned int length;
     struct sockaddr_in from;
     char buffer[256];
@@ -219,6 +226,73 @@ const char* listClient() {
 }
 
 int getSyncDir() {
-	return FAILURE;
+	pthread_t sync_t;
+
+	// create sync dir if doesnt exist yet
+	if(mkdir(folder, 0777) != 0 && errno != EEXIST){
+		fprintf(stderr, "Error while creating sync_dir.\n"); return FAILURE;
+	} else {
+		printf("Creating folder %s\n", folder);
+	}
+
+	// initializing the watcher for directory events (not inside thread cause it needs the folder as argument)
+	if(initSyncDirWatcher() == FAILURE){
+		fprintf(stderr,"Failure creating event watcher for sync_dir.\n");
+	}
+
+	// create thread to listen for events and sync
+	if(pthread_create(&sync_t, NULL, sync_thread, NULL)){
+		fprintf(stderr,"Failure creating sync thread.\n"); return FAILURE;
+	}
+
+	return SUCCESS;
 }
+
+int initSyncDirWatcher(){
+
+	notifyFile = inotify_init();
+	if(notifyFile < 0) return FAILURE;
+
+	notifyWatcher = inotify_add_watch(notifyFile, folder, IN_CREATE | IN_CLOSE_WRITE | IN_DELETE |
+		IN_MOVED_FROM | IN_MOVED_TO);
+
+	return SUCCESS;
+}
+
+void *sync_thread(){
+	char buffer[EVENT_BUF_LEN];
+	int length;
+	int i = 0;
+
+	//TODO: create sock to server, download all files at first
+
+	while(TRUE){
+		length  = read(notifyFile, buffer, EVENT_BUF_LEN);
+		if(length < 0){
+			fprintf(stderr, "Error reading notify event file.\n");
+		}
+
+		while(i < length){
+			struct inotify_event *event = (struct inotify_event *) &buffer[i];
+			if(event->len){
+				//TODO: put uploadFile here
+				if(event->mask & IN_CREATE || event->mask & IN_CLOSE_WRITE || event->mask & IN_MOVED_TO){
+					if(event->mask & IN_ISDIR) printf("Directory uploaded %s\n", event->name);
+					else printf("File uploaded %s\n", event->name);
+				}
+				//TODO: deleteFile here
+				if(event->mask & IN_DELETE || event->mask & IN_MOVED_FROM){
+					if(event->mask & IN_ISDIR) printf("Directory deleted %s\n", event->name);
+					else printf("File deleted %s\n", event->name);
+				}
+			}
+			i += EVENT_SIZE + event->len;
+		}
+
+		i = 0;
+		sleep(10);
+	}
+}
+
+
 

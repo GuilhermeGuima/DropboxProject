@@ -1,5 +1,8 @@
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <sys/inotify.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <netdb.h>
@@ -7,13 +10,17 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
+#include <errno.h>
 
 #define PORT 4000
+#define EVENT_SIZE (sizeof(struct inotify_event))
+#define EVENT_BUF_LEN (1024*(EVENT_SIZE + 16))
 
 void sendFile(char *file, Connection *connection);
 void testeMensagens(int port, char *user);
 void selectCommand();
-int firstConnection(char *user, char *folder, Connection *connection);
+int connectServer(char *user, struct hostent *server, Connection *connection);
+int firstConnection(char *user, Connection *connection);
 
 int uploadFile(char *file_path);
 int downloadFile(char *file_path);
@@ -21,4 +28,5 @@ int deleteFile(char *file_path);
 const char* listServer();
 const char* listClient();
 int getSyncDir();
-
+int initSyncDirWatcher();
+void *sync_thread();
