@@ -3,14 +3,21 @@
 #define ACK 0
 #define CMD 1
 #define DATA 2
+#define UPLOAD 3
+#define DOWNLOAD 4
+#define DELETE 5
+#define LISTSERVER 6
+#define EXIT 7
+#define CONNECT 8
 
 //Size
 
 #define PACKAGE_SIZE 1024
 #define DATA_SEGMENT_SIZE 1000
-#define USER_NAME_SIZE 19
+#define USER_NAME_SIZE 18
 #define MAX_PATH 256
 #define MAX_FILES 20
+#define MAX_FILE_NAME 64
 
 //Strings
 
@@ -42,4 +49,8 @@
 #define CMD_LISTSERVER_LEN 11
 #define CMD_LISTCLIENT_LEN 11
 #define CMD_GETSYNCDIR_LEN 12
+
+// Connection
+
+#define TIMEOUT 3 // in seconds
 

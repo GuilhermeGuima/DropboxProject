@@ -69,7 +69,9 @@ void *clientThread(void *arg) {
 	char buffer[256];
 	socklen_t clilen;
 	struct sockaddr_in serv_addr, cli_addr;
-	Package *package = malloc(sizeof(*package));
+	Package *package = malloc(sizeof(Package));
+	Connection *connection = malloc(sizeof(Connection));
+	int seqnum = 0;
 
 	DEBUG_PRINT("Porta %d\n", client->port);
 
@@ -88,11 +90,38 @@ void *clientThread(void *arg) {
 
 	clilen = sizeof(struct sockaddr_in);
 
+	connection->socket = sockfd;
+	connection->address = &serv_addr;
+
 	while (TRUE) {
 		sleep(2);
 
 		DEBUG_PRINT("ENTROU NO WHILE DA CLIENT THREAD\n");
 		DEBUG_PRINT("PORTA DO CLIENTE %d\n", client->port);
+
+		Package *request = malloc(sizeof(Package));
+		receivePackage(connection, request, seqnum);
+
+		switch(request->type){
+			case UPLOAD:
+				printf("Uploading file %s for user %s\n",request->data,request->user);
+				break;
+			case DOWNLOAD:
+				printf("Sending file %s for user %s\n",request->data,request->user);
+				break;
+			case DELETE:
+				printf("Deleting file %s for user %s\n",request->data,request->user);
+				break;
+			case LISTSERVER:
+				printf("Listing files for user %s\n",request->user);
+				break;
+			case EXIT:
+				printf("Logging out of user %s\n", request->user);
+				break;
+			default: printf("Invalid command number %d\n", request->type);
+		}
+
+		seqnum = 1 - seqnum;
 	}
 }
 

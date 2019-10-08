@@ -1,3 +1,6 @@
+#ifndef UTIL_H
+#define UTIL_H
+
 #define DEBUG // Comentar esta linha para desativar DEBUG mode.
 
 #include <sys/types.h>
@@ -14,6 +17,8 @@
 #include <math.h>
 #include <pwd.h>
 #include <pthread.h>
+#include <time.h>
+#include <libgen.h>
 
 #include "definitions.h"
 
@@ -35,12 +40,19 @@ typedef struct package {
 
 typedef struct connection_udp {
   int socket;
-  struct sockaddr_in* adress;
+  struct sockaddr_in* address;
 } Connection;
 
+int setTimeout(int sockfd);
+int sendPackage(Package *package, Connection *connection);
+int receivePackage(Connection *connection, Package *buffer, int expectedSeq);
+void receiveFile(Connection *connection, char* buffer, int *file_size);
+void sendFile(char *file, Connection *connection);
 void printPackage(Package *package);
 Package* newPackage(unsigned short int type, char* user, unsigned short int seq, unsigned short int length, char*data);
 int sendPackage(Package *package, Connection *connection);
 int getFileSize(char *path);
 char* getUserHome();
 char* itoa(int i, char b[]);
+
+#endif

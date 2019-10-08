@@ -6,13 +6,22 @@
 #include <string.h>
 #include <netdb.h>
 #include <stdio.h>
+#include "dropboxUtil.h"
 
 #define PORT 4000
 
+typedef struct file_metadata {
+	char name[MAX_FILE_NAME];	// with extension
+	char last_modified[MAX_FILE_NAME];	// time as returned by the ctime function
+	int size;
+} File_Meta;
+
 typedef struct client {
   char username[USER_NAME_SIZE];
+  int devices[2]; 	// socket ports for the two client sessions
   int logged;
-  int port;
+  File_Meta files[MAX_FILES];
+  int port;			// delete when we start using devices
 } Client;
 
 typedef struct client_list {

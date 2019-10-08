@@ -1,15 +1,15 @@
-#include "../include/dropboxUtil.h"
 #include "../include/dropboxClient.h"
 
 int notifyWatcher, notifyFile;
-char folder[256];
+struct hostent *server;
+char folder[MAX_PATH];
+Connection *connection;
+char user[USER_NAME_SIZE];
+int seqnum = 0;
 
 int main(int argc, char *argv[]) {
-	int sockfd, port;
-	struct sockaddr_in serv_addr;
-	struct hostent *server;
-	char user[USER_NAME_SIZE];
-	Connection *connection = malloc(sizeof(*connection));
+	int port;
+	Connection *firstConn = malloc(sizeof(Connection));
 
 	DEBUG_PRINT("OPÇÃO DE DEBUG ATIVADA\n");
 
@@ -38,18 +38,11 @@ int main(int argc, char *argv[]) {
 	DEBUG_PRINT("User: %s\n", user);
 	DEBUG_PRINT("Folder: %s\n", folder);
 
-	if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) == -1)
-		fprintf(stderr, "ERROR opening socket\n");
 
-	serv_addr.sin_family = AF_INET;
-	serv_addr.sin_port = htons(PORT);
-	serv_addr.sin_addr = *((struct in_addr *)server->h_addr);
-	bzero(&(serv_addr.sin_zero), 8);
+	firstConn = getConnection(PORT);
 
-	connection->socket = sockfd;
-	connection->adress = &serv_addr;
-
-	port = firstConnection(user, connection);
+	port = firstConnection(user, firstConn);
+	connection = getConnection(port);
 
 	if (port > 0) {
 
@@ -58,7 +51,7 @@ int main(int argc, char *argv[]) {
 		selectCommand();
 	}
 
-	close(sockfd);
+	close(connection->socket);
 
 	inotify_rm_watch(notifyFile, notifyWatcher); // removes the directory from inotify watcher
 	close(notifyFile); //close inotify file
@@ -66,11 +59,32 @@ int main(int argc, char *argv[]) {
 	return SUCCESS;
 }
 
+Connection* getConnection(int port){
+	int sockfd;
+	Connection *connection = malloc(sizeof(*connection));
+	struct sockaddr_in *serv_addr = malloc(sizeof(serv_addr));
+
+	if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) == -1)
+		fprintf(stderr, "ERROR opening socket\n");
+	setTimeout(sockfd);
+
+	serv_addr->sin_family = AF_INET;
+	serv_addr->sin_port = htons(port);
+	serv_addr->sin_addr = *((struct in_addr *)server->h_addr);
+	bzero(&(serv_addr->sin_zero), 8);
+
+	connection->socket = sockfd;
+	connection->address = serv_addr;
+
+	return connection;
+}
+
 void selectCommand() {
 	char command[12 + MAX_PATH];
 	char path[MAX_PATH];
 	char *valid;
 
+	sleep(2);
 	printf("\n\nComandos disponíveis:\n\nupload <file>\ndownload <file>\ndelete <file>\nlist_server\nlist_client\nexit\n\n");
 
 	do {
@@ -137,6 +151,13 @@ void selectCommand() {
 			printf("\n\nComandos disponíveis:\n\nupload <file>\ndownload <file>\ndelete <file>\nlist_server\nlist_client\nexit\n\n");
 		}
 	} while ( strcmp(command, CMD_EXIT) != 0 );
+
+	closeConnection();
+}
+
+void closeConnection(){
+	Package *commandPackage = newPackage(EXIT,user,seqnum,0,CMD_EXIT);
+	sendPackage(commandPackage, connection);
 }
 
 int firstConnection(char *user, Connection *connection) {
@@ -147,7 +168,7 @@ int firstConnection(char *user, Connection *connection) {
 
     strcpy(buffer, user);
 
-    n = sendto(connection->socket, buffer, strlen(buffer), 0, (const struct sockaddr *) connection->adress, sizeof(struct sockaddr_in));
+    n = sendto(connection->socket, buffer, strlen(buffer), 0, (const struct sockaddr *) connection->address, sizeof(struct sockaddr_in));
     if (n < 0)
         printf("ERROR sendto\n");
 
@@ -171,51 +192,35 @@ int firstConnection(char *user, Connection *connection) {
     return port;
 }
 
-void sendFile(char *file, Connection *connection) {
-    FILE* pFile;
-    Package *package;
-    int file_size = 0;
-    int total_send = 0;
-    unsigned short int seq = 0;
-    unsigned short int length = 0;
-    char data[DATA_SEGMENT_SIZE];
-
-    DEBUG_PRINT("INICIANDO FUNÇÃO \"sendFile\" PARA ENVIO DE ARQUIVOS\n");
-    pFile = fopen(file, "rb");
-    if(pFile) {
-        file_size = getFileSize(file);
-        length = floor(file_size/DATA_SEGMENT_SIZE);
-        DEBUG_PRINT("TAMANHO DO ARQUIVO: %d\n", file_size);
-        for ( total_send = 0 ; total_send < file_size ; total_send = total_send + DATA_SEGMENT_SIZE ) {
-            bzero(data, DATA_SEGMENT_SIZE);
-            if ( (file_size - total_send) < DATA_SEGMENT_SIZE ) {
-                fread(data, sizeof(char), (file_size - total_send), pFile);
-            }
-            else {
-                fread(data, sizeof(char), DATA_SEGMENT_SIZE, pFile);
-            }
-
-            package = newPackage(CMD, "username", seq, length, data);
-            sendPackage(package, connection);
-            seq++;
-        }
-        fclose(pFile);
-    }
-}
-
 int uploadFile(char *file_path) {
-	return FAILURE;
+	char* filename = basename(file_path);
+	Package *commandPackage = newPackage(UPLOAD,user,seqnum,0,filename);
+	sendPackage(commandPackage, connection);
+	seqnum = 1 - seqnum;
+	//sendFile(file_path, connection);
+
+	return SUCCESS;
 }
 
 int downloadFile(char *file_path) {
+	char* filename = basename(file_path);
+	Package *commandPackage = newPackage(DOWNLOAD,user,seqnum,0,filename);
+	sendPackage(commandPackage, connection);
+	seqnum = 1 - seqnum;
 	return FAILURE;
 }
 
 int deleteFile(char *file_path) {
+	char* filename = basename(file_path);
+	Package *commandPackage = newPackage(DELETE,user,seqnum,0,filename);
+	sendPackage(commandPackage, connection);
 	return FAILURE;
 }
 
 const char* listServer() {
+	Package *commandPackage = newPackage(LISTSERVER,user,seqnum,0,CMD_LISTCLIENT);
+	sendPackage(commandPackage, connection);
+	seqnum = 1 - seqnum;
 	const char* response = "Função a ser implementada";
 	return response;
 }
@@ -263,8 +268,10 @@ void *sync_thread(){
 	char buffer[EVENT_BUF_LEN];
 	int length;
 	int i = 0;
+	//Connection *connection;
 
 	//TODO: create sock to server, download all files at first
+	//connection = getConnection();
 
 	while(TRUE){
 		length  = read(notifyFile, buffer, EVENT_BUF_LEN);
@@ -277,11 +284,11 @@ void *sync_thread(){
 			if(event->len){
 				//TODO: put uploadFile here
 				if(event->mask & IN_CREATE || event->mask & IN_CLOSE_WRITE || event->mask & IN_MOVED_TO){
-					if(! event->mask & IN_ISDIR) printf("File uploaded %s\n", event->name);
+					if(! (event->mask & IN_ISDIR)) printf("File uploaded %s\n", event->name);
 				}
 				//TODO: deleteFile here
 				if(event->mask & IN_DELETE || event->mask & IN_MOVED_FROM){
-					if(! event->mask & IN_ISDIR) printf("File deleted %s\n", event->name);
+					if(! (event->mask & IN_ISDIR)) printf("File deleted %s\n", event->name);
 				}
 			}
 			i += EVENT_SIZE + event->len;
@@ -291,6 +298,3 @@ void *sync_thread(){
 		sleep(10);
 	}
 }
-
-
-
