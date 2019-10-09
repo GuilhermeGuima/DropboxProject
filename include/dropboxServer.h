@@ -10,17 +10,11 @@
 
 #define PORT 4000
 
-typedef struct file_metadata {
-	char name[MAX_FILE_NAME];	// with extension
-	char last_modified[MAX_FILE_NAME];	// time as returned by the ctime function
-	int size;
-} File_Meta;
-
 typedef struct client {
   char username[USER_NAME_SIZE];
   int devices[2]; 	// socket ports for the two client sessions
+  struct sockaddr_in addr[2]; // addresses for the two client sessions
   int logged;
-  File_Meta files[MAX_FILES];
 } Client;
 
 typedef struct client_list {
@@ -29,10 +23,12 @@ typedef struct client_list {
 } ClientList;
 
 void *clientThread(void *arg);
+void *syncThread(void *arg);
 Client* newClient(char* username);
 void initializeClientList();
 int approveClient(Client* client, ClientList** client_list, int port);
-ClientList* addClient(Client* client, ClientList* client_list);
+ClientList* addClient(Client* client, ClientList** client_list, int port);
 ClientList* removeClient(char *username, int port);
 void printListClient(ClientList* client_list);
-
+void sendList(char *file_path, char* username, Connection *connection);
+void sendBroadcastMessage(int port, struct sockaddr_in *addr, int operation, char *file, char *username);

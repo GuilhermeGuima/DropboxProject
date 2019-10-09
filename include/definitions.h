@@ -8,7 +8,8 @@
 #define DELETE 5
 #define LISTSERVER 6
 #define EXIT 7
-#define CONNECT 8
+#define SYNC 8
+#define BROADCAST 9
 
 //Size
 
@@ -56,4 +57,6 @@
 
 #define TIMEOUT 3 // in seconds
 #define SEQUENCE_SHIFT 2 //sequence number shift on data transmission
+#define LIST_START_SEQ 2 //sequence number shift for file list transmission
+#define MAX_LIST_SIZE 4000
 

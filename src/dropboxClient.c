@@ -41,13 +41,17 @@ int main(int argc, char *argv[]) {
 
 
 	firstConn = getConnection(PORT);
+	connection = firstConn;
 
 	port = firstConnection(user, firstConn);
-	connection = getConnection(port);
 
 	if (port > 0) {
 
+		pthread_t bcast;
+
 		getSyncDir();
+
+		pthread_create(&bcast, NULL, broadcast_thread, NULL);
 
 		selectCommand();
 	}
@@ -58,26 +62,6 @@ int main(int argc, char *argv[]) {
 	close(notifyFile); //close inotify file
 
 	return SUCCESS;
-}
-
-Connection* getConnection(int port){
-	int sockfd;
-	Connection *connection = malloc(sizeof(*connection));
-	struct sockaddr_in *serv_addr = malloc(sizeof(serv_addr));
-
-	if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) == -1)
-		fprintf(stderr, "ERROR opening socket\n");
-	setTimeout(sockfd);
-
-	serv_addr->sin_family = AF_INET;
-	serv_addr->sin_port = htons(port);
-	serv_addr->sin_addr = *((struct in_addr *)server->h_addr);
-	bzero(&(serv_addr->sin_zero), 8);
-
-	connection->socket = sockfd;
-	connection->address = serv_addr;
-
-	return connection;
 }
 
 void selectCommand() {
@@ -105,8 +89,8 @@ void selectCommand() {
 			strcpy(path, command+CMD_UPLOAD_LEN);
 			DEBUG_PRINT("Parâmetro do upload: %s\n", path);
 
-			if(uploadFile(path)) {
-				printf("Feito upload do arquivo \"%s\" com sucesso.\n", path);
+			if(uploadFile(path, &seqnum, connection)) {
+				printf("Feito upload do arquivo com sucesso.\n");
 			} else {
 				printf("Falha ao fazer upload do arquivo \"%s\". Por favor, tente novamente.\n", path);
 			}
@@ -126,16 +110,16 @@ void selectCommand() {
 
 			strcpy(path, command+CMD_DELETE_LEN);
 			DEBUG_PRINT("Parâmetro do delete: %s\n", path);
-
-			if(deleteFile(path)) {
-				printf("Arquivo \"%s\" deletado com sucesso.\n", path);
+			
+			if(deleteFile(path, &seqnum, connection)) {
+				printf("Arquivo deletado com sucesso.\n");
 			} else {
 				printf("Falha ao tentar deletar o arquivo \"%s\". Por favor, tente novamente.\n", path);
 			}
 		} else if(strncmp(command, CMD_LISTSERVER, CMD_LISTSERVER_LEN) == 0) {
 			DEBUG_PRINT("Detectado comando list_server\n");
 
-			printf("%s\n", listServer());
+			listServer();
 		} else if(strncmp(command, CMD_LISTCLIENT, CMD_LISTCLIENT_LEN) == 0) {
 			DEBUG_PRINT("Detectado comando list_client\n");
 
@@ -192,11 +176,11 @@ int firstConnection(char *user, Connection *connection) {
     return port;
 }
 
-int uploadFile(char *file_path) {
+int uploadFile(char *file_path, int *seqNumber, Connection *connection) {
 	char* filename = basename(file_path);
-	Package *commandPackage = newPackage(UPLOAD,user,seqnum,0,filename);
+	Package *commandPackage = newPackage(UPLOAD,user,*seqNumber,0,filename);
 	sendPackage(commandPackage, connection);
-	seqnum = 1 - seqnum;
+	*seqNumber = 1 - *seqNumber;
 
 	struct stat buf;
 	if (stat(file_path, &buf) == 0)
@@ -224,35 +208,40 @@ int downloadFile(char *file_path) {
 	return SUCCESS;
 }
 
-int deleteFile(char *file_path) {
+int deleteFile(char *file_path, int *seqNumber, Connection *connection) {
 	char* filename = basename(file_path);
-	Package *commandPackage = newPackage(DELETE,user,seqnum,0,filename);
+	Package *commandPackage = newPackage(DELETE,user,*seqNumber,0,filename);
 	sendPackage(commandPackage, connection);
-	return FAILURE;
+	*seqNumber = *seqNumber -1;
+
+	return SUCCESS;
 }
 
-const char* listServer() {
+void listServer() {
 	Package *commandPackage = newPackage(LISTSERVER,user,seqnum,0,CMD_LISTCLIENT);
 	sendPackage(commandPackage, connection);
 	seqnum = 1 - seqnum;
-	const char* response = "Função a ser implementada";
-	return response;
+	
+	char *s = receiveList();
+	printf("%s", s);
+}
+
+char *receiveList(){
+	char *s = malloc(MAX_LIST_SIZE);
+	int i;
+	Package *buffer = malloc(sizeof(Package));
+
+	for(i = 0; i < MAX_LIST_SIZE/DATA_SEGMENT_SIZE; i++){
+		receivePackage(connection, buffer, LIST_START_SEQ+i);
+		strcpy(s,buffer->data);
+	}
+
+	return s;
 }
 
 void listClient() {
-	DIR *sync_dir;
-	struct dirent *dir;
-	sync_dir = opendir(folder);
-	if (sync_dir) {
-		printf("Arquivos presentes na pasta \"sync_dir\" local:\n");
-		while ((dir = readdir(sync_dir)) != NULL) {
-			printf("- \"%s\"\n", dir->d_name);
-		}
-		closedir(sync_dir);
-	}
-	else {
-		printf("Falha ao tentar ler o diretório local. Por favor, tente novamente.\n");
-	}
+	char *s = listDirectoryContents(folder);
+	printf("%s", s);
 }
 
 int getSyncDir() {
@@ -292,12 +281,33 @@ int initSyncDirWatcher(){
 void *sync_thread(){
 	char buffer[EVENT_BUF_LEN];
 	int length;
-	int i = 0;
-	//Connection *connection;
+	int i = 0, seqnumSyn = 0, seqnumReceiveSyn = 0;
+	Connection *connection;
+	char buf[256], *filename;
+    int port;
 
-	//TODO: create sock to server, download all files at first
-	//connection = getConnection();
+	//TODO: download all files at first
+	connection = getConnection(PORT);
 
+    strcpy(buf, user);
+
+    Package *p = newPackage(SYNC, user, seqnumSyn, 0, buf);
+    sendPackage(p, connection);
+    seqnumSyn = 1 - seqnumSyn;
+
+    receivePackage(connection, p, seqnumReceiveSyn);
+    seqnumReceiveSyn = 1 - seqnumReceiveSyn;
+
+    if (strcmp(p->data, ACCESS_ERROR) == 0) {
+        DEBUG_PRINT("O SERVIDOR NÃO APROVOU A CONEXÃO\n");
+    }
+
+    port = atoi(p->data);
+    connection = getConnection(port);
+
+    DEBUG_PRINT("PORTA RECEBIDA SYNC: %d\n", port);
+
+    seqnumSyn = 0;
 	while(TRUE){
 		length  = read(notifyFile, buffer, EVENT_BUF_LEN);
 		if(length < 0){
@@ -307,13 +317,17 @@ void *sync_thread(){
 		while(i < length){
 			struct inotify_event *event = (struct inotify_event *) &buffer[i];
 			if(event->len){
-				//TODO: put uploadFile here
 				if(event->mask & IN_CREATE || event->mask & IN_CLOSE_WRITE || event->mask & IN_MOVED_TO){
-					if(! (event->mask & IN_ISDIR)) printf("File uploaded %s\n", event->name);
+					if(! (event->mask & IN_ISDIR)){
+						filename = makePath(folder,event->name);
+						uploadFile(filename, &seqnumSyn, connection);
+					}
 				}
-				//TODO: deleteFile here
 				if(event->mask & IN_DELETE || event->mask & IN_MOVED_FROM){
-					if(! (event->mask & IN_ISDIR)) printf("File deleted %s\n", event->name);
+					if(! (event->mask & IN_ISDIR)){
+						filename = makePath(folder,event->name);
+						deleteFile(filename, &seqnumSyn, connection);
+					}
 				}
 			}
 			i += EVENT_SIZE + event->len;
@@ -324,3 +338,70 @@ void *sync_thread(){
 	}
 }
 
+void *broadcast_thread(){
+	/*char buffer[EVENT_BUF_LEN];
+	int seqnumSyn = 0, seqnumReceiveSyn = 0;
+	Connection *connection;
+	char *buf, bufFirst[256], *file_path;
+    int port, file_size;
+
+	connection = getConnection(PORT);
+
+    strcpy(bufFirst, user);
+
+    Package *p = newPackage(BROADCAST, user, seqnumSyn, 0, bufFirst);
+    sendPackage(p, connection);
+    seqnumSyn = 1 - seqnumSyn;
+
+    receivePackage(connection, p, seqnumReceiveSyn);
+    seqnumReceiveSyn = 1 - seqnumReceiveSyn;
+
+    if (strcmp(p->data, ACCESS_ERROR) == 0) {
+        DEBUG_PRINT("O SERVIDOR NÃO APROVOU A CONEXÃO\n");
+    }
+
+    port = atoi(p->data);
+
+    DEBUG_PRINT("PORTA RECEBIDA BROADCAST: %d\n", port);
+
+    seqnumReceiveSyn = 0;
+
+    while(TRUE){
+    	Package *request = malloc(sizeof(Package));
+		receivePackage(connection, request, seqnumReceiveSyn);
+
+		switch(request->type){
+			case UPLOAD:
+				receiveFile(connection, &buf, &file_size);
+				file_path = makePath(folder,request->data);
+				saveFile(buffer, file_size, file_path);
+				break;
+			case DELETE:
+				file_path = makePath(folder,request->data);
+				remove(file_path);
+				break;
+			default: printf("Invalid command number %d\n", request->type);
+		}
+    }*/
+
+}
+
+Connection* getConnection(int port){
+    int sockfd;
+    Connection *connection = malloc(sizeof(*connection));
+    struct sockaddr_in *serv_addr = malloc(sizeof(serv_addr));
+
+    if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) == -1)
+        fprintf(stderr, "ERROR opening socket\n");
+    setTimeout(sockfd);
+
+    serv_addr->sin_family = AF_INET;
+    serv_addr->sin_port = htons(port);
+    serv_addr->sin_addr = *((struct in_addr *)server->h_addr);
+    bzero(&(serv_addr->sin_zero), 8);
+
+    connection->socket = sockfd;
+    connection->address = serv_addr;
+
+    return connection;
+}

@@ -22,6 +22,40 @@ int setTimeout(int sockfd){
     return SUCCESS;
 }
 
+char* listDirectoryContents(char* dir_path){
+    DIR *parent_dir;
+    struct dirent *dp;
+    struct stat sb;
+
+    char file_path[MAX_PATH];
+    char *s = malloc(4000);
+    strcpy(s,"");
+    char *str = malloc(200);
+
+    if((parent_dir = opendir(dir_path)) == NULL){
+        printf("Error opening directory %s\n", dir_path);
+        return NULL;
+    }
+
+    while((dp = readdir(parent_dir)) != NULL){
+        strcpy(file_path, dir_path);
+        strcat(file_path,"/");
+        strcat(file_path, dp->d_name);
+        
+        if(stat(file_path, &sb) != -1){
+            if((sb.st_mode & S_IFMT) == S_IFDIR){
+                // skip directories
+                continue;
+            }else{
+                sprintf(str,"File: %s\n- Last modified: %s - Access time: %s - Changed time: %s", 
+                    dp->d_name, ctime(&sb.st_mtime), ctime(&sb.st_atime), ctime(&sb.st_ctime));
+                strcat(s,str);
+            }
+        }
+    }
+    return s;
+}
+
 Package* newPackage(unsigned short int type, char* user, unsigned short int seq, unsigned short int length, char *data) {
 
     DEBUG_PRINT("CRIANDO NOVO PACOTE\n");
@@ -132,8 +166,8 @@ void sendFile(char *file, Connection *connection, char* username) {
 
     DEBUG_PRINT("INICIANDO FUNÇÃO \"sendFile\" PARA ENVIO DE ARQUIVOS\n");
     pFile = fopen(file, "rb");
-    if(pFile) {
-        file_size = getFileSize(file);
+    file_size = getFileSize(file);
+    if(pFile && file_size != 0) {
 
         length = floor(file_size/DATA_SEGMENT_SIZE);
         for ( total_send = 0 ; total_send < file_size ; total_send = total_send + DATA_SEGMENT_SIZE ) {

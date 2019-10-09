@@ -19,6 +19,7 @@
 #include <pthread.h>
 #include <time.h>
 #include <libgen.h>
+#include <dirent.h>
 
 #include "definitions.h"
 
@@ -54,6 +55,7 @@ Package* newPackage(unsigned short int type, char* user, unsigned short int seq,
 int sendPackage(Package *package, Connection *connection);
 int getFileSize(char *path);
 char* makePath(char* user, char* filename);
+char* listDirectoryContents(char* dir_path);
 char* getUserHome();
 char* itoa(int i, char b[]);
 
