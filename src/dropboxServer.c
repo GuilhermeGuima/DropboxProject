@@ -15,7 +15,6 @@ int main(int argc, char *argv[]) {
 
 	initializeClientList();
 
-
 	DEBUG_PRINT("OPÇÃO DE DEBUG ATIVADA\n");
 
 	if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) == -1)
@@ -36,7 +35,7 @@ int main(int argc, char *argv[]) {
 	connection.socket = sockfd;
 
 	while (TRUE) {
-		printf("Esperando conexões de novos clientes\n");
+		printf("Aguardando conexões de clientes\n");
 		seqnumReceive = 0; seqnumSend = 0;
 
 		receivePackage(&connection, buffer, seqnumReceive);
@@ -100,18 +99,16 @@ void *clientThread(void *arg) {
 
 		switch(request->type){
 			case UPLOAD:
-				printf("Uploading file %s for user %s\n",request->data,request->user);
+				printf("Processing Upload of file %s for user %s\n",request->data,request->user);
 				receiveFile(connection, &buffer, &file_size);
-				
 				file_path = makePath(request->user,request->data);
 				saveFile(buffer, file_size, file_path);
 				break;
 			case DOWNLOAD:
-				printf("Sending file %s for user %s\n",request->data,request->user);
+				printf("Processing Download of file %s for user %s\n",request->data,request->user);
 				file_path = makePath(request->user,request->data);
 				printf("File_path_to_download: %s\n", file_path);
 				sendFile(file_path, connection, request->user);
-
 				break;
 			case DELETE:
 				printf("Deleting file %s for user %s\n",request->data,request->user);
@@ -120,7 +117,7 @@ void *clientThread(void *arg) {
 				printf("Listing files for user %s\n",request->user);
 				break;
 			case EXIT:
-				printf("Logging out of user %s\n", request->user);
+				printf("Processing user %s\n logout", request->user);
 				client_list = removeClient(request->user, port);
 				break;
 			default: printf("Invalid command number %d\n", request->type);

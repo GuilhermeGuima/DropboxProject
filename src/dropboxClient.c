@@ -139,7 +139,7 @@ void selectCommand() {
 		} else if(strncmp(command, CMD_LISTCLIENT, CMD_LISTCLIENT_LEN) == 0) {
 			DEBUG_PRINT("Detectado comando list_client\n");
 
-			printf("%s\n", listClient());
+			listClient();
 		} else if(strncmp(command, CMD_GETSYNCDIR, CMD_GETSYNCDIR_LEN) == 0) {
 			DEBUG_PRINT("Detectado comando get_sync_dir\n");
 
@@ -239,9 +239,20 @@ const char* listServer() {
 	return response;
 }
 
-const char* listClient() {
-	const char* response = "Função a ser implementada";
-	return response;
+void listClient() {
+	DIR *sync_dir;
+	struct dirent *dir;
+	sync_dir = opendir(folder);
+	if (sync_dir) {
+		printf("Arquivos presentes na pasta \"sync_dir\" local:\n");
+		while ((dir = readdir(sync_dir)) != NULL) {
+			printf("- \"%s\"\n", dir->d_name);
+		}
+		closedir(sync_dir);
+	}
+	else {
+		printf("Falha ao tentar ler o diretório local. Por favor, tente novamente.\n");
+	}
 }
 
 int getSyncDir() {
@@ -312,3 +323,4 @@ void *sync_thread(){
 		sleep(10);
 	}
 }
+

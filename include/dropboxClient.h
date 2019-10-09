@@ -11,6 +11,7 @@
 #include <unistd.h>
 #include <string.h>
 #include <errno.h>
+#include <dirent.h>
 
 #include "dropboxUtil.h"
 
@@ -28,8 +29,9 @@ void closeConnection();
 int uploadFile(char *file_path);
 int downloadFile(char *file_path);
 int deleteFile(char *file_path);
-const char* listServer();
-const char* listClient();
-int getSyncDir();
-int initSyncDirWatcher();
-void *sync_thread();
+const char* listServer(void);
+void listClient(void);
+int getSyncDir(void);
+int initSyncDirWatcher(void);
+void *sync_thread(void);
+

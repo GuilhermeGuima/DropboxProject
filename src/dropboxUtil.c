@@ -205,7 +205,6 @@ void saveFile(char *buffer, int file_size, char *path){
     }
 
     //TODO: after writing the client list function, update user's files after one has been sent
-
 }
 
 int getFileSize(char *path) {
