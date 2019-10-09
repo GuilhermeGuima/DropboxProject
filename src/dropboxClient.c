@@ -30,8 +30,9 @@ int main(int argc, char *argv[]) {
 		strcpy(folder, getUserHome());
 		strcat(folder, "/sync_dir_");
 		strcat(folder, user);
+		printf("Bem vindo %s!\n", user);
 	} else {
-		printf("O tamanho máximo para o novo usuário é %d\n", USER_NAME_SIZE);
+		printf("O tamanho máximo para um novo usuário é %d. Por favor, digite um nome válido.\n", USER_NAME_SIZE);
 		return FAILURE;
 	}
 
@@ -147,6 +148,10 @@ void selectCommand() {
 			} else {
 				printf("Falha ao tentar sincronizar o diretório sync_dir. Por favor, tente novamente.\n");
 			}
+		} else if(strncmp(command, CMD_EXIT, CMD_EXIT_LEN) == 0) {
+			DEBUG_PRINT("Detectado comando exit\n");
+
+			printf("Encerrando aplicação.\n\n");
 		} else {
 			printf("Comando não reconhecido, insira um comando válido e atente para espaços.\n\n");
 			printf("\n\nComandos disponíveis:\n\nupload <file>\ndownload <file>\ndelete <file>\nlist_server\nlist_client\nexit\n\n");
@@ -246,7 +251,7 @@ int getSyncDir() {
 	if(mkdir(folder, 0777) != 0 && errno != EEXIST){
 		fprintf(stderr, "Error while creating sync_dir.\n"); return FAILURE;
 	} else {
-		printf("Creating folder %s\n", folder);
+		printf("Criando diretório %s\n", folder);
 	}
 
 	// initializing the watcher for directory events (not inside thread cause it needs the folder as argument)

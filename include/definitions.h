@@ -50,6 +50,7 @@
 #define CMD_LISTSERVER_LEN 11
 #define CMD_LISTCLIENT_LEN 11
 #define CMD_GETSYNCDIR_LEN 12
+#define CMD_EXIT_LEN 4
 
 // Connection
 
