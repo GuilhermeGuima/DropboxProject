@@ -41,13 +41,13 @@ char* listDirectoryContents(char* dir_path){
         strcpy(file_path, dir_path);
         strcat(file_path,"/");
         strcat(file_path, dp->d_name);
-        
+
         if(stat(file_path, &sb) != -1){
             if((sb.st_mode & S_IFMT) == S_IFDIR){
                 // skip directories
                 continue;
             }else{
-                sprintf(str,"File: %s\n- Last modified: %s - Access time: %s - Changed time: %s", 
+                sprintf(str,"File: %s\n- Last modified: %s - Access time: %s - Changed time: %s",
                     dp->d_name, ctime(&sb.st_mtime), ctime(&sb.st_atime), ctime(&sb.st_ctime));
                 strcat(s,str);
             }
@@ -85,7 +85,7 @@ int sendPackage(Package *package, Connection *connection){
     unsigned int length;
     struct sockaddr_in from;
     Package *ackBuffer = malloc(PACKAGE_SIZE);
-    
+
     do{
         DEBUG_PRINT("ENVIANDO PACOTE TIPO %d SEQ %d\n", package->type, package->seq);
         n = sendto(connection->socket, package, PACKAGE_SIZE, 0, (const struct sockaddr *) connection->address, sizeof(struct sockaddr_in));
@@ -119,7 +119,7 @@ int receivePackage(Connection *connection, Package *buffer, int expectedSeq){
     Package *package = malloc(PACKAGE_SIZE);
 
     length = sizeof(struct sockaddr_in);
-    
+
     // blocking call
     while(1){
         DEBUG_PRINT("RECEBENDO PACOTE %d\n", expectedSeq);
@@ -204,10 +204,10 @@ void receiveFile(Connection *connection, char** buffer, int *file_size){
         receivePackage(connection, package, seqFile);
         offset = (package->seq-SEQUENCE_SHIFT)*DATA_SEGMENT_SIZE;
     }
-    
+
     memcpy(*buffer+offset, package->data, DATA_SEGMENT_SIZE);
     *file_size = package->length*DATA_SEGMENT_SIZE+strlen(package->data);
-    
+
     free(package);
 }
 
@@ -222,7 +222,7 @@ void saveFile(char *buffer, int file_size, char *path){
             fprintf(stderr, "Error while writing file %s\n", path);
             return;
         }
-        
+
         for ( bytes_written = 0 ; bytes_written < file_size ; bytes_written += DATA_SEGMENT_SIZE ) {
             if ( (file_size - bytes_written) < DATA_SEGMENT_SIZE ) {
                 fwrite(buffer+bytes_written, sizeof(char), (file_size - bytes_written), fp);
@@ -255,12 +255,12 @@ char* getUserHome() {
     return "";
 }
 
-char* makePath(char* user, char* filename){
-    char *path = malloc(MAX_FILE_NAME+USER_NAME_SIZE+1);
+char* makePath(char* left, char* right){
+    char *path = malloc(MAX_PATH);
 
-    strcpy(path, user);
+    strcpy(path, left);
     strcat(path, "/");
-    strcat(path, filename);
+    strcat(path, right);
 
     return path;
 }

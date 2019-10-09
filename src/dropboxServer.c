@@ -166,6 +166,8 @@ void *clientThread(void *arg) {
 				printf("Processing Upload of file %s for user %s\n",request->data,request->user);
 				receiveFile(connection, &buffer, &file_size);
 				file_path = makePath(request->user,request->data);
+				file_path = makePath(server_folder, file_path);
+				DEBUG_PRINT("GUIIIIIIIIIIIIIIIIIIIIIIIIIIII O FILE PATH DEU %s \n", file_path);
 				saveFile(buffer, file_size, file_path);
 				broadcast(UPLOAD,request->data, request->user);
 				break;

@@ -1,7 +1,7 @@
 #ifndef UTIL_H
 #define UTIL_H
 
-//#define DEBUG // Comentar esta linha para desativar DEBUG mode.
+#define DEBUG // Comentar esta linha para desativar DEBUG mode.
 
 #include <sys/types.h>
 #include <sys/socket.h>
