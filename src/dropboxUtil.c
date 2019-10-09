@@ -153,7 +153,7 @@ void sendFile(char *file, Connection *connection, char* username) {
         bzero(data,DATA_SEGMENT_SIZE);
         package = newPackage(DATA, username, seq, length, data);
         sendPackage(package, connection);
-        fprintf(stderr, "Erro na abertura do arquivo %s\n",file);
+        fprintf(stderr, "Erro na abertura do arquivo \"%s\".\n",file);
     }
 }
 

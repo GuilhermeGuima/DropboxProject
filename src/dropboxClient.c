@@ -106,9 +106,9 @@ void selectCommand() {
 			DEBUG_PRINT("Parâmetro do upload: %s\n", path);
 
 			if(uploadFile(path)) {
-				printf("Feito upload do arquivo com sucesso.\n");
+				printf("Feito upload do arquivo \"%s\" com sucesso.\n", path);
 			} else {
-				printf("Falha ao fazer upload do arquivo. Por favor, tente novamente.\n");
+				printf("Falha ao fazer upload do arquivo \"%s\". Por favor, tente novamente.\n", path);
 			}
 		} else if(strncmp(command, CMD_DOWNLOAD, CMD_DOWNLOAD_LEN) == 0) {
 			DEBUG_PRINT("Detectado comando download\n");
@@ -117,9 +117,9 @@ void selectCommand() {
 			DEBUG_PRINT("Parâmetro do download: %s\n", path);
 
 			if(downloadFile(path)) {
-				printf("Feito download do arquivo com sucesso.\n");
+				printf("Feito download do arquivo \"%s\" com sucesso.\n", path);
 			} else {
-				printf("Falha ao fazer download do arquivo. Por favor, tente novamente.\n");
+				printf("Falha ao fazer download do arquivo \"%s\". Por favor, tente novamente.\n", path);
 			}
 		} else if(strncmp(command, CMD_DELETE, CMD_DELETE_LEN) == 0) {
 			DEBUG_PRINT("Detectado comando delete\n");
@@ -128,9 +128,9 @@ void selectCommand() {
 			DEBUG_PRINT("Parâmetro do delete: %s\n", path);
 
 			if(deleteFile(path)) {
-				printf("Arquivo deletado com sucesso.\n");
+				printf("Arquivo \"%s\" deletado com sucesso.\n", path);
 			} else {
-				printf("Falha ao tentar deletar o arquivo. Por favor, tente novamente.\n");
+				printf("Falha ao tentar deletar o arquivo \"%s\". Por favor, tente novamente.\n", path);
 			}
 		} else if(strncmp(command, CMD_LISTSERVER, CMD_LISTSERVER_LEN) == 0) {
 			DEBUG_PRINT("Detectado comando list_server\n");
