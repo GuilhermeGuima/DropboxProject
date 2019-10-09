@@ -115,6 +115,7 @@ void *clientThread(void *arg) {
 				break;
 			case EXIT:
 				printf("Logging out of user %s\n", request->user);
+				client_list = removeClient(request->user, port);
 				break;
 			default: printf("Invalid command number %d\n", request->type);
 		}
@@ -190,19 +191,33 @@ ClientList* addClient(Client* client, ClientList* client_list) {
     return client_list;
 }
 
-ClientList* removeClient(Client* client, ClientList* client_list) {
+ClientList* removeClient(char* username, int port) {
     ClientList *current = client_list;
     ClientList *prev_client = NULL;
 
     while(current != NULL) {
-        if (strcmp(current->client->username, client->username) == 0) {
-            //if (current->client->port == client->port ) {
-                if (prev_client != NULL) {
-                    prev_client->next = current->next;
-                } else {
-                    client_list = current->next;
-                }
-            //}
+        if (strcmp(current->client->username, username) == 0) {
+            if(current->client->devices[0] == port){
+            	current->client->devices[0] = INVALID;
+
+            	if(current->client->devices[1] == INVALID){
+            		if (prev_client != NULL) {
+                    	prev_client->next = current->next;
+	                } else {
+	                    client_list = current->next;
+	                }
+            	}
+            } else if(current->client->devices[1] == port){
+            	current->client->devices[1] = INVALID;
+
+            	if(current->client->devices[0] == INVALID){
+            		if (prev_client != NULL) {
+                    	prev_client->next = current->next;
+	                } else {
+	                    client_list = current->next;
+	                }
+            	}
+            }
         }
         prev_client = current;
         current = current->next;

@@ -33,6 +33,6 @@ Client* newClient(char* username);
 void initializeClientList();
 int approveClient(Client* client, ClientList** client_list, int port);
 ClientList* addClient(Client* client, ClientList* client_list);
-ClientList* removeClient(Client* client, ClientList* client_list);
+ClientList* removeClient(char *username, int port);
 void printListClient(ClientList* client_list);
 

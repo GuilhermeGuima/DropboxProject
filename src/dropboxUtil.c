@@ -150,6 +150,9 @@ void sendFile(char *file, Connection *connection, char* username) {
         }
         fclose(pFile);
     }else{
+        bzero(data,DATA_SEGMENT_SIZE);
+        package = newPackage(DATA, username, seq, length, data);
+        sendPackage(package, connection);
         fprintf(stderr, "Erro na abertura do arquivo %s\n",file);
     }
 }
@@ -204,8 +207,10 @@ void saveFile(char *buffer, int file_size, char *filename, char* user){
 
         fclose(fp);
     }else{
-        fprintf(stderr, "Erro na abertura do arquivo %s\n",filename);
+        // error, file didnt exist at client
+        return;
     }
+
     //TODO: after writing the client list function, update user's files after one has been sent
 
 }

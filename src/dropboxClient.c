@@ -193,7 +193,13 @@ int uploadFile(char *file_path) {
 	sendPackage(commandPackage, connection);
 	seqnum = 1 - seqnum;
 
-	sendFile(file_path, connection, user);
+	struct stat buf;
+	if (stat(file_path, &buf) == 0)
+		sendFile(file_path, connection, user);
+	else{
+		sendFile(file_path, connection, user);
+		return FAILURE;
+	}
 
 	return SUCCESS;
 }
