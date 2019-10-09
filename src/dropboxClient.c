@@ -206,10 +206,17 @@ int uploadFile(char *file_path) {
 
 int downloadFile(char *file_path) {
 	char* filename = basename(file_path);
+	int file_size;
+	char *buffer = NULL;
+
 	Package *commandPackage = newPackage(DOWNLOAD,user,seqnum,0,filename);
 	sendPackage(commandPackage, connection);
 	seqnum = 1 - seqnum;
-	return FAILURE;
+
+	receiveFile(connection, &buffer, &file_size);
+	saveFile(buffer, file_size, filename);
+
+	return SUCCESS;
 }
 
 int deleteFile(char *file_path) {

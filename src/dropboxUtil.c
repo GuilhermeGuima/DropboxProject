@@ -128,7 +128,7 @@ void sendFile(char *file, Connection *connection, char* username) {
     int total_send = 0;
     unsigned short int seq = SEQUENCE_SHIFT; // start at two to avoid clash with comands sequence
     unsigned short int length = 0;
-    char data[DATA_SEGMENT_SIZE];
+    char data[DATA_SEGMENT_SIZE+1];
 
     DEBUG_PRINT("INICIANDO FUNÇÃO \"sendFile\" PARA ENVIO DE ARQUIVOS\n");
     pFile = fopen(file, "rb");
@@ -137,7 +137,7 @@ void sendFile(char *file, Connection *connection, char* username) {
 
         length = floor(file_size/DATA_SEGMENT_SIZE);
         for ( total_send = 0 ; total_send < file_size ; total_send = total_send + DATA_SEGMENT_SIZE ) {
-            bzero(data, DATA_SEGMENT_SIZE);
+            bzero(data, DATA_SEGMENT_SIZE+1);
             if ( (file_size - total_send) < DATA_SEGMENT_SIZE ) {
                 fread(data, sizeof(char), (file_size - total_send), pFile);
             }
@@ -177,22 +177,15 @@ void receiveFile(Connection *connection, char** buffer, int *file_size){
     free(package);
 }
 
-void saveFile(char *buffer, int file_size, char *filename, char* user){
+void saveFile(char *buffer, int file_size, char *path){
 
     FILE *fp;
-    char path[MAX_FILE_NAME+USER_NAME_SIZE+1];
     int bytes_written;
-
-    printf("file size: %d\n",file_size);
-
-    strcpy(path, user);
-    strcat(path, "/");
-    strcat(path, filename);
 
     if(file_size != 0){
         fp = fopen(path, "w");
         if(fp == NULL){
-            fprintf(stderr, "Error while writing file %s\n", filename);
+            fprintf(stderr, "Error while writing file %s\n", path);
             return;
         }
         
@@ -227,6 +220,16 @@ char* getUserHome() {
         return pw->pw_dir;
     }
     return "";
+}
+
+char* makePath(char* user, char* filename){
+    char *path = malloc(MAX_FILE_NAME+USER_NAME_SIZE+1);
+
+    strcpy(path, user);
+    strcat(path, "/");
+    strcat(path, filename);
+
+    return path;
 }
 
 char* itoa(int i, char b[]) {
