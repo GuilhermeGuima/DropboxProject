@@ -9,7 +9,7 @@ int main(int argc, char *argv[]) {
 	int *port_count = malloc(sizeof(int));
 	Package *buffer = malloc(sizeof(Package));
 	char portMapper[DATA_SEGMENT_SIZE];
-	pthread_t th1;
+	pthread_t th1, th2;
 	Client *client;
 	int seqnumSend = 0, seqnumReceive = 0;
 
@@ -43,13 +43,23 @@ int main(int argc, char *argv[]) {
 		seqnumReceive = 1 - seqnumReceive;
 
 		*port_count = *port_count + 1;
-		client = newClient(buffer->data);
+
 		bzero(portMapper, DATA_SEGMENT_SIZE);
 		itoa(*port_count, portMapper);
+		client = newClient(buffer->data);
+		client->addr[0] = *connection.address;
 
 		if (approveClient(client, &client_list, *port_count)) {
-			pthread_create(&th1, NULL, clientThread, (void*) port_count);
-		} else {
+			if(buffer->type == SYNC){
+				// client sync socket
+				pthread_create(&th2, NULL, syncThread, (void*) port_count);
+			}else if(buffer->type == BROADCAST){
+				addClient(client, &client_list, *port_count);
+			}else{
+				// new client socket
+				pthread_create(&th1, NULL, clientThread, (void*) port_count);	
+			}
+		}else{
 			DEBUG_PRINT("O CLIENTE JA ESTA USANDO DOIS DISPOSITIVOS\n");
 			strcpy(portMapper, ACCESS_ERROR);
 			*port_count = *port_count - 1;
@@ -62,6 +72,46 @@ int main(int argc, char *argv[]) {
 
 	close(sockfd);
 	return SUCCESS;
+}
+
+void broadcast(int operation, char* file, char *username){
+	ClientList *current = client_list;
+
+    while(current != NULL){
+        if (strcmp(current->client->username, username) == 0) {
+        	// both in use
+            if(current->client->devices[0] != INVALID){
+            	sendBroadcastMessage(current->client->devices[0], &current->client->addr[0],  operation, file, username);            	
+            } else if(current->client->devices[1] != INVALID){
+            	sendBroadcastMessage(current->client->devices[1], &current->client->addr[1], operation, file, username);
+            }
+		}
+        current = current->next;
+    }
+}
+
+void sendBroadcastMessage(int port, struct sockaddr_in *addr, int operation, char *file, char *username){
+	
+	int sockfd;
+    Connection connection = connection;
+    struct sockaddr_in *client_addr = malloc(sizeof(struct sockaddr_in));
+
+    if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) == -1)
+        fprintf(stderr, "ERROR opening socket\n");
+    setTimeout(sockfd);
+
+    client_addr->sin_family = AF_INET;
+    client_addr->sin_port = htons(port);
+    client_addr->sin_addr = *((struct in_addr *)addr);
+    bzero(&(client_addr->sin_zero), 8);
+
+    connection.socket = sockfd;
+    connection.address = client_addr;
+
+	Package *p = newPackage(operation,username,0,0,file);
+	sendPackage(p,&connection);
+	char *file_path = makePath(username, file);
+	sendFile(file_path, &connection, username);
 }
 
 void *clientThread(void *arg) {
@@ -105,24 +155,76 @@ void *clientThread(void *arg) {
 				
 				file_path = makePath(request->user,request->data);
 				saveFile(buffer, file_size, file_path);
+				broadcast(UPLOAD,request->data, request->user);
 				break;
 			case DOWNLOAD:
 				printf("Sending file %s for user %s\n",request->data,request->user);
 				file_path = makePath(request->user,request->data);
 				sendFile(file_path, connection, request->user);
-
 				break;
 			case DELETE:
 				printf("Deleting file %s for user %s\n",request->data,request->user);
 				file_path = makePath(request->user,request->data);
 				if(remove(file_path) == 0){
 					printf("Sucessfully deleted file\n");
+					broadcast(DELETE,request->data, request->user);
 				}
 				break;
 			case LISTSERVER:
 				printf("Listing files for user %s\n",request->user);
 				file_path = makePath(request->user,"");
 				sendList(file_path, request->user, connection);
+				break;
+			default: printf("Invalid command number %d\n", request->type);
+		}
+	}
+}
+
+void *syncThread(void *arg) {
+	int port = *(int*) arg;
+	int sockfd, file_size;
+	char *buffer = NULL, *file_path = NULL;
+	struct sockaddr_in serv_addr;
+	Connection *connection = malloc(sizeof(Connection));
+	int seqnum = 0;
+
+	if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) == -1)
+		printf("ERROR opening socket");
+
+	serv_addr.sin_family = AF_INET;
+	serv_addr.sin_port = htons(port);
+	serv_addr.sin_addr.s_addr = INADDR_ANY;
+	bzero(&(serv_addr.sin_zero), 8);
+
+	if (bind(sockfd, (struct sockaddr *) &serv_addr, sizeof(struct sockaddr)) < 0)
+		printf("ERROR on binding");
+
+	connection->socket = sockfd;
+	connection->address = &serv_addr;
+
+	while (TRUE) {
+		sleep(1);
+
+		DEBUG_PRINT("ENTROU NO WHILE DA SYNC THREAD\n");
+		DEBUG_PRINT("PORTA DO CLIENTE %d\n", port);
+
+		Package *request = malloc(sizeof(Package));
+		receivePackage(connection, request, seqnum);
+		seqnum = 1 - seqnum;
+
+		switch(request->type){
+			case UPLOAD:
+				receiveFile(connection, &buffer, &file_size);
+				file_path = makePath(request->user,request->data);
+				saveFile(buffer, file_size, file_path);
+				broadcast(UPLOAD,request->data, request->user);
+				break;
+			case DELETE:
+				file_path = makePath(request->user,request->data);
+				if(remove(file_path) == 0){
+					printf("Sucessfully deleted file\n");
+					broadcast(DELETE,request->data, request->user);
+				}
 				break;
 			default: printf("Invalid command number %d\n", request->type);
 		}
@@ -145,7 +247,6 @@ void sendList(char* file_path, char* username, Connection *connection){
 
 Client* newClient(char* username) {
 	Client *client = malloc(sizeof(*client));
-	client->logged = TRUE;
 	strcpy(client->username , username);
 	return client;
 }
@@ -156,7 +257,6 @@ void initializeClientList() {
 
 int approveClient(Client* client, ClientList** client_list, int port) {
     ClientList *current = *client_list;
-    ClientList *last = *client_list;
 
     while(current != NULL){
         if (strcmp(current->client->username, client->username) == 0) {
@@ -164,11 +264,36 @@ int approveClient(Client* client, ClientList** client_list, int port) {
             if(current->client->devices[0] != INVALID && current->client->devices[1] != INVALID){
             	return FALSE;
             } else {
+            	//at least one free
+            	return TRUE;
+            }
+        }
+        current = current->next;
+    }
+  	return TRUE;
+}
+
+ClientList* addClient(Client* client, ClientList** client_list, int port) {
+    ClientList *current = *client_list;
+    ClientList *last = *client_list;
+
+    while(current != NULL){
+        if (strcmp(current->client->username, client->username) == 0) {
+        	// both in use
+            if(current->client->devices[0] != INVALID && current->client->devices[1] != INVALID){
+            	return *client_list;
+            } else {
             	DEBUG_PRINT("ADDED NEW DEVICE\n");
             	//at least one is free
-            	if(current->client->devices[0] == INVALID) current->client->devices[0] = port;
-            	else current->client->devices[1] = port;
-            	return TRUE;
+            	if(current->client->devices[0] == INVALID){ 
+            		current->client->devices[0] = port;
+            		current->client->addr[0] = client->addr[0];
+            	}
+            	else{
+            		current->client->devices[1] = port;
+            		current->client->addr[1] = client->addr[1];
+            	}
+            	return *client_list;
             }
         }
         last = current;
@@ -189,27 +314,7 @@ int approveClient(Client* client, ClientList** client_list, int port) {
   		last->next = new_client;
 
   	DEBUG_PRINT("ADDED NEW CLIENT\n");
-  	return TRUE;
-}
-
-ClientList* addClient(Client* client, ClientList* client_list) {
-    ClientList *current = client_list;
-    ClientList *new_client = malloc(sizeof(ClientList));
-
-    new_client->client = client;
-    new_client->next = NULL;
-
-    if (client_list == NULL) {
-        client_list = new_client;
-        return client_list;
-    }
-
-    while(current->next != NULL) {
-        current = current->next;
-    }
-
-    current->next = new_client;
-    return client_list;
+  	return *client_list;
 }
 
 ClientList* removeClient(char* username, int port) {

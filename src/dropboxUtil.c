@@ -166,8 +166,8 @@ void sendFile(char *file, Connection *connection, char* username) {
 
     DEBUG_PRINT("INICIANDO FUNÇÃO \"sendFile\" PARA ENVIO DE ARQUIVOS\n");
     pFile = fopen(file, "rb");
-    if(pFile) {
-        file_size = getFileSize(file);
+    file_size = getFileSize(file);
+    if(pFile && file_size != 0) {
 
         length = floor(file_size/DATA_SEGMENT_SIZE);
         for ( total_send = 0 ; total_send < file_size ; total_send = total_send + DATA_SEGMENT_SIZE ) {

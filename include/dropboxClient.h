@@ -25,12 +25,13 @@ int firstConnection(char *user, Connection *connection);
 Connection* getConnection(int port);
 void closeConnection();
 
-int uploadFile(char *file_path);
+int uploadFile(char *file_path, int *seqNumber, Connection *connection);
 int downloadFile(char *file_path);
-int deleteFile(char *file_path);
+int deleteFile(char *file_path, int *seqNumber, Connection *connection);
 void listServer();
 void listClient();
 char *receiveList();
 int getSyncDir();
 int initSyncDirWatcher();
 void *sync_thread();
+void *broadcast_thread();

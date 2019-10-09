@@ -8,7 +8,8 @@
 #define DELETE 5
 #define LISTSERVER 6
 #define EXIT 7
-#define CONNECT 8
+#define SYNC 8
+#define BROADCAST 9
 
 //Size
 
