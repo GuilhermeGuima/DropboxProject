@@ -1,7 +1,7 @@
 CC = gcc
-INC_DIR = ./include
-SRC_DIR = ./src
-BIN_DIR = ./bin
+INC_DIR = include/
+SRC_DIR = src/
+BIN_DIR = bin/
 DST_DIR = dst/
 CFLAGS = -Wall -g -std=gnu11
 
@@ -18,7 +18,8 @@ server: $(SRC_DIR)/dropboxServer.c
 	$(CC) $(CFLAGS) -o $(DST_DIR)/dropboxServer $(SRC_DIR)/dropboxServer.c $(BIN_DIR)/dropboxUtil.o -pthread -lm 
 
 clean:
-	rm -f $(DST_DIR)*.*
+	rm -f $(DST_DIR)dropboxClient
+	rm -f $(DST_DIR)dropboxServer
 	rm -f $(BIN_DIR)*.*
-	@echo "Every clear"
+	@echo "All clear!"
 
