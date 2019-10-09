@@ -35,4 +35,5 @@ int approveClient(Client* client, ClientList** client_list, int port);
 ClientList* addClient(Client* client, ClientList* client_list);
 ClientList* removeClient(char *username, int port);
 void printListClient(ClientList* client_list);
+void sendList(char *file_path, char* username, Connection *connection);
 

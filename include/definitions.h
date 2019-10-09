@@ -55,4 +55,6 @@
 
 #define TIMEOUT 3 // in seconds
 #define SEQUENCE_SHIFT 2 //sequence number shift on data transmission
+#define LIST_START_SEQ 2 //sequence number shift for file list transmission
+#define MAX_LIST_SIZE 4000
 

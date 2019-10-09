@@ -121,13 +121,25 @@ void *clientThread(void *arg) {
 				break;
 			case LISTSERVER:
 				printf("Listing files for user %s\n",request->user);
-				break;
-			case EXIT:
-				printf("Logging out of user %s\n", request->user);
-				client_list = removeClient(request->user, port);
+				file_path = makePath(request->user,"");
+				sendList(file_path, request->user, connection);
 				break;
 			default: printf("Invalid command number %d\n", request->type);
 		}
+	}
+}
+
+void sendList(char* file_path, char* username, Connection *connection){
+	char *s = listDirectoryContents(file_path);
+	char buf[DATA_SEGMENT_SIZE];
+	int i;
+	Package *p;
+
+	for(i = 0; i < MAX_LIST_SIZE/4; i++){
+		memcpy(buf,s,DATA_SEGMENT_SIZE-1);
+		buf[DATA_SEGMENT_SIZE-1] = '\0';
+		p = newPackage(DATA, username,LIST_START_SEQ+i,0,buf);
+		sendPackage(p, connection);
 	}
 }
 

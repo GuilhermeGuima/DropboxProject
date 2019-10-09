@@ -134,11 +134,11 @@ void selectCommand() {
 		} else if(strncmp(command, CMD_LISTSERVER, CMD_LISTSERVER_LEN) == 0) {
 			DEBUG_PRINT("Detectado comando list_server\n");
 
-			printf("%s\n", listServer());
+			listServer();
 		} else if(strncmp(command, CMD_LISTCLIENT, CMD_LISTCLIENT_LEN) == 0) {
 			DEBUG_PRINT("Detectado comando list_client\n");
 
-			printf("%s\n", listClient());
+			listClient();
 		} else if(strncmp(command, CMD_GETSYNCDIR, CMD_GETSYNCDIR_LEN) == 0) {
 			DEBUG_PRINT("Detectado comando get_sync_dir\n");
 
@@ -228,17 +228,31 @@ int deleteFile(char *file_path) {
 	return SUCCESS;
 }
 
-const char* listServer() {
+void listServer() {
 	Package *commandPackage = newPackage(LISTSERVER,user,seqnum,0,CMD_LISTCLIENT);
 	sendPackage(commandPackage, connection);
 	seqnum = 1 - seqnum;
-	const char* response = "Função a ser implementada";
-	return response;
+	
+	char *s = receiveList();
+	printf("%s", s);
 }
 
-const char* listClient() {
-	const char* response = "Função a ser implementada";
-	return response;
+char *receiveList(){
+	char *s = malloc(MAX_LIST_SIZE);
+	int i;
+	Package *buffer = malloc(sizeof(Package));
+
+	for(i = 0; i < MAX_LIST_SIZE/DATA_SEGMENT_SIZE; i++){
+		receivePackage(connection, buffer, LIST_START_SEQ+i);
+		strcpy(s,buffer->data);
+	}
+
+	return s;
+}
+
+void listClient() {
+	char *s = listDirectoryContents(folder);
+	printf("%s", s);
 }
 
 int getSyncDir() {
