@@ -69,6 +69,7 @@ int main(int argc, char *argv[]) {
 				addClient(client, &client_list, *port_count);
 			}else{
 				// new client socket
+				createClientFolder(client->username); // tem que ver se é aqui que tem que estar...
 				pthread_create(&th1, NULL, clientThread, (void*) port_count);
 			}
 		}else{
@@ -376,5 +377,18 @@ void printListClient(ClientList* client_list) {
         current = current->next;
         index++;
     }
+}
+
+void createClientFolder (char* name) {
+    char client_folder[MAX_PATH];
+
+    strcpy(client_folder, server_folder);
+	strcat(client_folder, "/");
+	strcat(client_folder, name);
+    if(mkdir(client_folder, 0777) != 0 && errno != EEXIST){
+		fprintf(stderr, "Error while creating user folder\n");
+	} else {
+		printf("Creating folder %s\n", client_folder);
+	}
 }
 

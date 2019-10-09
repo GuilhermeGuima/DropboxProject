@@ -33,3 +33,4 @@ ClientList* removeClient(char *username, int port);
 void printListClient(ClientList* client_list);
 void sendList(char *file_path, char* username, Connection *connection);
 void sendBroadcastMessage(int port, struct sockaddr_in *addr, int operation, char *file, char *username);
+void createClientFolder (char* name);
