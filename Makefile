@@ -20,6 +20,6 @@ server: $(SRC_DIR)/dropboxServer.c
 clean:
 	rm -f $(DST_DIR)dropboxClient
 	rm -f $(DST_DIR)dropboxServer
-	rm -f $(BIN_DIR)*.*
+	rm -f $(BIN_DIR)*.o
 	@echo "All clear!"
 
