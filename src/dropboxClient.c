@@ -44,7 +44,7 @@ int main(int argc, char *argv[]) {
 	connection = firstConn;
 
 	port = firstConnection(user, firstConn);
-
+    connection = getConnection(port);
 	if (port > 0) {
 
 		pthread_t bcast;
@@ -110,7 +110,7 @@ void selectCommand() {
 
 			strcpy(path, command+CMD_DELETE_LEN);
 			DEBUG_PRINT("Parâmetro do delete: %s\n", path);
-			
+
 			if(deleteFile(path, &seqnum, connection)) {
 				printf("Arquivo deletado com sucesso.\n");
 			} else {
@@ -221,7 +221,7 @@ void listServer() {
 	Package *commandPackage = newPackage(LISTSERVER,user,seqnum,0,CMD_LISTCLIENT);
 	sendPackage(commandPackage, connection);
 	seqnum = 1 - seqnum;
-	
+
 	char *s = receiveList();
 	printf("%s", s);
 }
