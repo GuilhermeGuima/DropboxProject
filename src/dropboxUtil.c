@@ -211,7 +211,7 @@ void receiveFile(Connection *connection, char** buffer, int *file_size){
     free(package);
 }
 
-void saveFile(char *buffer, int file_size, char *path){
+void saveFile(char *buffer, int file_size, char *path) {
 
     FILE *fp;
     int bytes_written;

@@ -167,13 +167,13 @@ void *clientThread(void *arg) {
 				receiveFile(connection, &buffer, &file_size);
 				file_path = makePath(request->user,request->data);
 				file_path = makePath(server_folder, file_path);
-				DEBUG_PRINT("GUIIIIIIIIIIIIIIIIIIIIIIIIIIII O FILE PATH DEU %s \n", file_path);
 				saveFile(buffer, file_size, file_path);
 				broadcast(UPLOAD,request->data, request->user);
 				break;
 			case DOWNLOAD:
 				printf("Processing Download of file %s for user %s\n",request->data,request->user);
 				file_path = makePath(request->user,request->data);
+				file_path = makePath(server_folder, file_path);
 				sendFile(file_path, connection, request->user);
 				break;
 			case DELETE:
