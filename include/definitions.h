@@ -23,6 +23,7 @@
 //Strings
 
 #define ACCESS_ERROR "access_error"
+#define SERVER_FOLDER_NAME "Dropbox_Users"
 
 //Constants
 

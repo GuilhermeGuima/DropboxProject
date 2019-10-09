@@ -31,6 +31,8 @@
   #define DEBUG_PRINT_COND(fmt, args...)
 #endif
 
+char server_folder[MAX_PATH];
+
 typedef struct package {
   unsigned short int type;
   unsigned short int seq;

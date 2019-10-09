@@ -17,6 +17,19 @@ int main(int argc, char *argv[]) {
 
 	DEBUG_PRINT("OPÇÃO DE DEBUG ATIVADA\n");
 
+	strcpy(server_folder, getUserHome());
+    strcat(server_folder, "/");
+    strcat(server_folder, SERVER_FOLDER_NAME);
+
+    DEBUG_PRINT("SERVER FOLDER: %s\n", server_folder);
+
+    if(mkdir(server_folder, 0777) != 0 && errno != EEXIST){
+		fprintf(stderr, "Error while creating server folder.\n");
+		return FAILURE;
+	} else {
+		printf("Creating folder %s\n", server_folder);
+	}
+
 	if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) == -1)
 		printf("ERROR opening socket");
 
@@ -56,7 +69,7 @@ int main(int argc, char *argv[]) {
 				addClient(client, &client_list, *port_count);
 			}else{
 				// new client socket
-				pthread_create(&th1, NULL, clientThread, (void*) port_count);	
+				pthread_create(&th1, NULL, clientThread, (void*) port_count);
 			}
 		}else{
 			DEBUG_PRINT("O CLIENTE JA ESTA USANDO DOIS DISPOSITIVOS\n");
@@ -80,7 +93,7 @@ void broadcast(int operation, char* file, char *username){
         if (strcmp(current->client->username, username) == 0) {
         	// both in use
             if(current->client->devices[0] != INVALID){
-            	sendBroadcastMessage(current->client->devices[0], &current->client->addr[0],  operation, file, username);            	
+            	sendBroadcastMessage(current->client->devices[0], &current->client->addr[0],  operation, file, username);
             } else if(current->client->devices[1] != INVALID){
             	sendBroadcastMessage(current->client->devices[1], &current->client->addr[1], operation, file, username);
             }
@@ -90,7 +103,7 @@ void broadcast(int operation, char* file, char *username){
 }
 
 void sendBroadcastMessage(int port, struct sockaddr_in *addr, int operation, char *file, char *username){
-	
+
 	int sockfd;
     Connection connection = connection;
     struct sockaddr_in *client_addr = malloc(sizeof(struct sockaddr_in));
@@ -286,7 +299,7 @@ ClientList* addClient(Client* client, ClientList** client_list, int port) {
             } else {
             	DEBUG_PRINT("ADDED NEW DEVICE\n");
             	//at least one is free
-            	if(current->client->devices[0] == INVALID){ 
+            	if(current->client->devices[0] == INVALID){
             		current->client->devices[0] = port;
             		current->client->addr[0] = client->addr[0];
             	}
@@ -311,7 +324,7 @@ ClientList* addClient(Client* client, ClientList** client_list, int port) {
   	if(*client_list == NULL)
   		//first element of list
   		*client_list = new_client;
-  	else	
+  	else
   		last->next = new_client;
 
   	DEBUG_PRINT("ADDED NEW CLIENT\n");

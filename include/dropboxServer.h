@@ -6,6 +6,7 @@
 #include <string.h>
 #include <netdb.h>
 #include <stdio.h>
+#include <errno.h>
 #include "dropboxUtil.h"
 
 #define PORT 4000
