@@ -223,7 +223,9 @@ int deleteFile(char *file_path) {
 	char* filename = basename(file_path);
 	Package *commandPackage = newPackage(DELETE,user,seqnum,0,filename);
 	sendPackage(commandPackage, connection);
-	return FAILURE;
+	seqnum = 1 - seqnum;
+
+	return SUCCESS;
 }
 
 const char* listServer() {

@@ -109,12 +109,15 @@ void *clientThread(void *arg) {
 			case DOWNLOAD:
 				printf("Sending file %s for user %s\n",request->data,request->user);
 				file_path = makePath(request->user,request->data);
-				printf("File_path_to_download: %s\n", file_path);
 				sendFile(file_path, connection, request->user);
 
 				break;
 			case DELETE:
 				printf("Deleting file %s for user %s\n",request->data,request->user);
+				file_path = makePath(request->user,request->data);
+				if(remove(file_path) == 0){
+					printf("Sucessfully deleted file\n");
+				}
 				break;
 			case LISTSERVER:
 				printf("Listing files for user %s\n",request->user);
