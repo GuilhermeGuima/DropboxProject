@@ -124,6 +124,7 @@ void sendBroadcastMessage(int port, struct sockaddr_in *addr, int operation, cha
 	Package *p = newPackage(operation,username,0,0,file);
 	sendPackage(p,&connection);
 	char *file_path = makePath(username, file);
+	file_path = makePath(server_folder, file_path);
 	sendFile(file_path, &connection, username);
 }
 
@@ -179,6 +180,7 @@ void *clientThread(void *arg) {
 			case DELETE:
 				printf("Deleting file %s for user %s\n",request->data,request->user);
 				file_path = makePath(request->user,request->data);
+				file_path = makePath(server_folder, file_path);
 				if(remove(file_path) == 0){
 					printf("Sucessfully deleted file\n");
 					broadcast(DELETE,request->data, request->user);
@@ -186,7 +188,7 @@ void *clientThread(void *arg) {
 				break;
 			case LISTSERVER:
 				printf("Listing files for user %s\n",request->user);
-				file_path = makePath(request->user,"");
+				file_path = makePath(server_folder, request->user);
 				sendList(file_path, request->user, connection);
 				break;
 			case EXIT:
@@ -233,11 +235,13 @@ void *syncThread(void *arg) {
 			case UPLOAD:
 				receiveFile(connection, &buffer, &file_size);
 				file_path = makePath(request->user,request->data);
+				file_path = makePath(server_folder, file_path);
 				saveFile(buffer, file_size, file_path);
 				broadcast(UPLOAD,request->data, request->user);
 				break;
 			case DELETE:
 				file_path = makePath(request->user,request->data);
+				file_path = makePath(server_folder, file_path);
 				if(remove(file_path) == 0){
 					printf("Sucessfully deleted file\n");
 					broadcast(DELETE,request->data, request->user);
