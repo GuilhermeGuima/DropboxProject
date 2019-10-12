@@ -299,6 +299,7 @@ void sendAllFiles(char *username, Connection *connection, int seqnum){
             	// sends file name
             	p = newPackage(CMD, username, seqnum, 0, dp->d_name);
                 sendPackage(p, connection);
+                seqnum = 1 - seqnum;
 
                 // sends file
                 sendFile(file_path, connection, username);
