@@ -171,6 +171,7 @@ void *clientThread(void *arg) {
 			case UPLOAD:
 				printf("Processing Upload of file %s for user %s\n",request->data,request->user);
 				receiveFile(connection, &buffer, &file_size);
+				printf("Received file of size: %d\n",file_size);
 				file_path = makePath(request->user,request->data);
 				file_path = makePath(server_folder, file_path);
 				saveFile(buffer, file_size, file_path);

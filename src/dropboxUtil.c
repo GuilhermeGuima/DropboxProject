@@ -183,11 +183,13 @@ void sendFile(char *file, Connection *connection, char* username) {
         for ( total_send = 0 ; total_send < file_size ; total_send = total_send + DATA_SEGMENT_SIZE ) {
             bzero(data, DATA_SEGMENT_SIZE);
             if ( (file_size - total_send) < DATA_SEGMENT_SIZE ) {
+                printf("Last: ");
                 fread(data, sizeof(char), (file_size - total_send), pFile);
             }
             else {
                 fread(data, sizeof(char), DATA_SEGMENT_SIZE, pFile);
             }
+            printf("Seq: %d Len: %d\n", seq, length);
             package = newPackage(DATA, username, seq, length, data);
             sendPackage(package, connection);
             seq++;
@@ -208,21 +210,22 @@ void receiveFile(Connection *connection, char** buffer, int *file_size){
     seqFile++;
     *file_size = atoi(package->data);
 
+    int written = 0;
+
     if(file_size != 0){
         receivePackage(connection, package, seqFile);
         *buffer = malloc((package->length+1)*DATA_SEGMENT_SIZE);
-
+        
         while(package->length != package->seq-SEQUENCE_SHIFT-1){
             memcpy(*buffer+offset, package->data, DATA_SEGMENT_SIZE);
+            written += DATA_SEGMENT_SIZE;
             seqFile++;
-            receivePackage(connection, package, seqFile);
             offset = (package->seq-SEQUENCE_SHIFT)*DATA_SEGMENT_SIZE;
-
-            free(package);
-            package = NULL;
+            receivePackage(connection, package, seqFile);
         }
 
-        memcpy(*buffer+offset, package->data, DATA_SEGMENT_SIZE);
+        memcpy(*buffer+offset, package->data, *file_size-written);
+        written += *file_size-written;
     }
 
     free(package);
@@ -243,6 +246,8 @@ void saveFile(char *buffer, int file_size, char *path) {
 
         for ( bytes_written = 0 ; bytes_written < file_size ; bytes_written += DATA_SEGMENT_SIZE ) {
             if ( (file_size - bytes_written) < DATA_SEGMENT_SIZE ) {
+                printf("Bytes written: %d\n", bytes_written);
+                printf("To write: %d\n", file_size-bytes_written);
                 fwrite(buffer+bytes_written, sizeof(char), (file_size - bytes_written), fp);
             }
             else {
