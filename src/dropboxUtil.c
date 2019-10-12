@@ -74,7 +74,7 @@ Package* newPackage(unsigned short int type, char* user, unsigned short int seq,
     package->type = type;
     package->seq = seq;
     package->length = length;
-    strcpy(package->data, data);
+    memcpy(package->data, data, DATA_SEGMENT_SIZE);
     return package;
 
 }
@@ -162,16 +162,26 @@ void sendFile(char *file, Connection *connection, char* username) {
     int total_send = 0;
     unsigned short int seq = SEQUENCE_SHIFT; // start at two to avoid clash with comands sequence
     unsigned short int length = 0;
-    char data[DATA_SEGMENT_SIZE+1];
+    char data[DATA_SEGMENT_SIZE];
 
     DEBUG_PRINT("INICIANDO FUNÇÃO \"sendFile\" PARA ENVIO DE ARQUIVOS\n");
     pFile = fopen(file, "rb");
     file_size = getFileSize(file);
-    if(pFile && file_size != 0) {
+
+    // sends file size
+    itoa(file_size, data);
+    package = newPackage(CMD, username, seq, 0, data);
+    sendPackage(package, connection);
+    seq++;
+
+    free(package);
+    package = NULL;
+
+    if(pFile) {
 
         length = floor(file_size/DATA_SEGMENT_SIZE);
         for ( total_send = 0 ; total_send < file_size ; total_send = total_send + DATA_SEGMENT_SIZE ) {
-            bzero(data, DATA_SEGMENT_SIZE+1);
+            bzero(data, DATA_SEGMENT_SIZE);
             if ( (file_size - total_send) < DATA_SEGMENT_SIZE ) {
                 fread(data, sizeof(char), (file_size - total_send), pFile);
             }
@@ -181,13 +191,10 @@ void sendFile(char *file, Connection *connection, char* username) {
             package = newPackage(DATA, username, seq, length, data);
             sendPackage(package, connection);
             seq++;
+            free(package);
+            package = NULL;
         }
         fclose(pFile);
-    }else{
-        bzero(data,DATA_SEGMENT_SIZE);
-        package = newPackage(DATA, username, seq, length, data);
-        sendPackage(package, connection);
-        fprintf(stderr, "Erro na abertura do arquivo \"%s\".\n",file);
     }
 }
 
@@ -195,20 +202,31 @@ void receiveFile(Connection *connection, char** buffer, int *file_size){
     Package *package = malloc(sizeof(Package));
     int seqFile = SEQUENCE_SHIFT;
     int offset = 0;
-    receivePackage(connection, package, seqFile);
-    *buffer = malloc((package->length+1)*DATA_SEGMENT_SIZE);
 
-    while(package->length != package->seq-SEQUENCE_SHIFT){
-        memcpy(*buffer+offset, package->data, DATA_SEGMENT_SIZE);
-        seqFile += 1;
+    // receives package with file_size
+    receivePackage(connection, package, seqFile);
+    seqFile++;
+    *file_size = atoi(package->data);
+
+    if(file_size != 0){
         receivePackage(connection, package, seqFile);
-        offset = (package->seq-SEQUENCE_SHIFT)*DATA_SEGMENT_SIZE;
+        *buffer = malloc((package->length+1)*DATA_SEGMENT_SIZE);
+
+        while(package->length != package->seq-SEQUENCE_SHIFT-1){
+            memcpy(*buffer+offset, package->data, DATA_SEGMENT_SIZE);
+            seqFile++;
+            receivePackage(connection, package, seqFile);
+            offset = (package->seq-SEQUENCE_SHIFT)*DATA_SEGMENT_SIZE;
+
+            free(package);
+            package = NULL;
+        }
+
+        memcpy(*buffer+offset, package->data, DATA_SEGMENT_SIZE);
     }
 
-    memcpy(*buffer+offset, package->data, DATA_SEGMENT_SIZE);
-    *file_size = package->length*DATA_SEGMENT_SIZE+strlen(package->data);
-
     free(package);
+    package = NULL;
 }
 
 void saveFile(char *buffer, int file_size, char *path) {
@@ -237,8 +255,6 @@ void saveFile(char *buffer, int file_size, char *path) {
         // error, file didnt exist at client
         return;
     }
-
-    //TODO: after writing the client list function, update user's files after one has been sent
 }
 
 int getFileSize(char *path) {

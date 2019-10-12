@@ -1,7 +1,7 @@
 #ifndef UTIL_H
 #define UTIL_H
 
-#define DEBUG // Comentar esta linha para desativar DEBUG mode.
+//#define DEBUG // Comentar esta linha para desativar DEBUG mode.
 
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -30,8 +30,6 @@
   #define DEBUG_PRINT(fmt, args...) /* Don't do anything in release builds */
   #define DEBUG_PRINT_COND(fmt, args...)
 #endif
-
-char server_folder[MAX_PATH];
 
 typedef struct package {
   unsigned short int type;

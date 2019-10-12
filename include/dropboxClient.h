@@ -34,5 +34,6 @@ void listClient();
 char *receiveList();
 int getSyncDir();
 int initSyncDirWatcher();
+void downloadAllFiles(Connection *connection, int seqnum, int seqnumReceive);
 void *sync_thread();
 void *broadcast_thread();

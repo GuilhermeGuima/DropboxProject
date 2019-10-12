@@ -47,11 +47,11 @@ int main(int argc, char *argv[]) {
     connection = getConnection(port);
 	if (port > 0) {
 
-		pthread_t bcast;
+		//pthread_t bcast;
 
 		getSyncDir();
 
-		pthread_create(&bcast, NULL, broadcast_thread, NULL);
+		//pthread_create(&bcast, NULL, broadcast_thread, NULL);
 
 		selectCommand();
 	}
@@ -151,9 +151,10 @@ void closeConnection(){
 }
 
 int firstConnection(char *user, Connection *connection) {
-    char buffer[256];
+    char buffer[DATA_SEGMENT_SIZE];
     int port;
 
+    bzero(buffer, DATA_SEGMENT_SIZE);
     strcpy(buffer, user);
 
     Package *p = newPackage(CMD, user, seqnum, 0, buffer);
@@ -254,11 +255,6 @@ int getSyncDir() {
 		printf("Criando diretório %s\n", folder);
 	}
 
-	// initializing the watcher for directory events (not inside thread cause it needs the folder as argument)
-	if(initSyncDirWatcher() == FAILURE){
-		fprintf(stderr,"Failure creating event watcher for sync_dir.\n");
-	}
-
 	// create thread to listen for events and sync
 	if(pthread_create(&sync_t, NULL, sync_thread, NULL)){
 		fprintf(stderr,"Failure creating sync thread.\n"); return FAILURE;
@@ -283,12 +279,12 @@ void *sync_thread(){
 	int length;
 	int i = 0, seqnumSyn = 0, seqnumReceiveSyn = 0;
 	Connection *connection;
-	char buf[256], *filename;
+	char buf[DATA_SEGMENT_SIZE], *filename;
     int port;
 
-	//TODO: download all files at first
 	connection = getConnection(PORT);
 
+	bzero(buf, DATA_SEGMENT_SIZE);
     strcpy(buf, user);
 
     Package *p = newPackage(SYNC, user, seqnumSyn, 0, buf);
@@ -304,10 +300,19 @@ void *sync_thread(){
 
     port = atoi(p->data);
     connection = getConnection(port);
+    seqnumSyn = 0; seqnumReceiveSyn = 0;
+
+    // initializing the watcher for directory events 
+	if(initSyncDirWatcher() == FAILURE){
+		fprintf(stderr,"Failure creating event watcher for sync_dir.\n");
+	}
+
+	DEBUG_PRINT("DOWNLOADING ALL FILES IN SERVER'S FOLDER\n");
+
+	downloadAllFiles(connection, seqnumSyn, seqnumReceiveSyn);
 
     DEBUG_PRINT("PORTA RECEBIDA SYNC: %d\n", port);
 
-    seqnumSyn = 0;
 	while(TRUE){
 		length  = read(notifyFile, buffer, EVENT_BUF_LEN);
 		if(length < 0){
@@ -338,15 +343,43 @@ void *sync_thread(){
 	}
 }
 
+void downloadAllFiles(Connection *connection, int seqnum, int seqnumReceive){
+
+	int nbFiles, i, file_size;
+	char *buffer, *file_path;
+
+	Package *p = newPackage(DOWNLOAD_ALL, user, seqnum, 0, "");
+    sendPackage(p, connection);
+    seqnum = 1 - seqnum;
+
+    // the response package from a DOWNLOAD_ALL request has the nb of files as data
+    receivePackage(connection, p, seqnumReceive);
+    seqnumReceive = 1 - seqnumReceive;
+
+    nbFiles = atoi(p->data);
+    for(i = 0; i < nbFiles; i++){
+    	receivePackage(connection, p, seqnumReceive);
+    	seqnumReceive = 1 - seqnumReceive;
+
+    	receiveFile(connection, &buffer, &file_size);
+
+    	file_path = makePath(folder,p->data);
+    	saveFile(buffer, file_size, file_path);
+    }
+
+    DEBUG_PRINT("DOWNLOADED %d FILES INTO SYNC DIR\n", nbFiles);
+}
+
 void *broadcast_thread(){
 	/*char buffer[EVENT_BUF_LEN];
 	int seqnumSyn = 0, seqnumReceiveSyn = 0;
 	Connection *connection;
-	char *buf, bufFirst[256], *file_path;
+	char *buf, bufFirst[DATA_SEGMENT_SIZE], *file_path;
     int port, file_size;
 
 	connection = getConnection(PORT);
 
+	bzero(bufFirst, DATA_SEGMENT_SIZE);
     strcpy(bufFirst, user);
 
     Package *p = newPackage(BROADCAST, user, seqnumSyn, 0, bufFirst);
@@ -383,7 +416,7 @@ void *broadcast_thread(){
 			default: printf("Invalid command number %d\n", request->type);
 		}
     }*/
-
+    return NULL;
 }
 
 Connection* getConnection(int port){

@@ -10,6 +10,7 @@
 #define EXIT 7
 #define SYNC 8
 #define BROADCAST 9
+#define DOWNLOAD_ALL 10
 
 //Size
 

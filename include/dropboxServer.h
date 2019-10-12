@@ -3,6 +3,7 @@
 #include <unistd.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <arpa/inet.h>
 #include <string.h>
 #include <netdb.h>
 #include <stdio.h>
@@ -10,6 +11,8 @@
 #include "dropboxUtil.h"
 
 #define PORT 4000
+
+char server_folder[MAX_PATH];
 
 typedef struct client {
   char username[USER_NAME_SIZE];
@@ -34,3 +37,5 @@ void printListClient(ClientList* client_list);
 void sendList(char *file_path, char* username, Connection *connection);
 void sendBroadcastMessage(int port, struct sockaddr_in *addr, int operation, char *file, char *username);
 void createClientFolder (char* name);
+void sendAllFiles(char *username, Connection *connection, int seqnum);
+int countFiles(char *username);

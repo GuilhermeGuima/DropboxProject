@@ -2,6 +2,7 @@
 #include "../include/dropboxServer.h"
 
 ClientList *client_list;
+pthread_mutex_t portBarrier = PTHREAD_MUTEX_INITIALIZER;
 
 int main(int argc, char *argv[]) {
 	int sockfd;
@@ -65,12 +66,14 @@ int main(int argc, char *argv[]) {
 			if(buffer->type == SYNC){
 				// client sync socket
 				pthread_create(&th2, NULL, syncThread, (void*) port_count);
+				pthread_mutex_lock(&portBarrier);
 			}else if(buffer->type == BROADCAST){
 				addClient(client, &client_list, *port_count);
 			}else{
-				// new client socket
-				createClientFolder(client->username); // tem que ver se é aqui que tem que estar...
+				// new client socket--
+				createClientFolder(client->username); 
 				pthread_create(&th1, NULL, clientThread, (void*) port_count);
+				pthread_mutex_lock(&portBarrier);
 			}
 		}else{
 			DEBUG_PRINT("O CLIENTE JA ESTA USANDO DOIS DISPOSITIVOS\n");
@@ -130,6 +133,8 @@ void sendBroadcastMessage(int port, struct sockaddr_in *addr, int operation, cha
 
 void *clientThread(void *arg) {
 	int port = *(int*) arg;
+	pthread_mutex_unlock(&portBarrier);
+
 	int sockfd, file_size;
 	char *buffer = NULL, *file_path = NULL;
 	struct sockaddr_in serv_addr;
@@ -169,7 +174,8 @@ void *clientThread(void *arg) {
 				file_path = makePath(request->user,request->data);
 				file_path = makePath(server_folder, file_path);
 				saveFile(buffer, file_size, file_path);
-				broadcast(UPLOAD,request->data, request->user);
+				printf("Client conn: %s:%d\n",inet_ntoa(connection->address->sin_addr), ntohs(connection->address->sin_port));
+				//broadcast(UPLOAD,request->data, request->user);
 				break;
 			case DOWNLOAD:
 				printf("Processing Download of file %s for user %s\n",request->data,request->user);
@@ -183,7 +189,7 @@ void *clientThread(void *arg) {
 				file_path = makePath(server_folder, file_path);
 				if(remove(file_path) == 0){
 					printf("Sucessfully deleted file\n");
-					broadcast(DELETE,request->data, request->user);
+					//broadcast(DELETE,request->data, request->user);
 				}
 				break;
 			case LISTSERVER:
@@ -201,11 +207,14 @@ void *clientThread(void *arg) {
 
 void *syncThread(void *arg) {
 	int port = *(int*) arg;
-	int sockfd, file_size;
+	pthread_mutex_unlock(&portBarrier);
+
+	int sockfd, file_size, nbFiles;
 	char *buffer = NULL, *file_path = NULL;
+	char nbFilesBuffer[DATA_SEGMENT_SIZE];
 	struct sockaddr_in serv_addr;
 	Connection *connection = malloc(sizeof(Connection));
-	int seqnum = 0;
+	int seqnum = 0, seqnumSend = 0;
 
 	if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) == -1)
 		printf("ERROR opening socket");
@@ -237,19 +246,85 @@ void *syncThread(void *arg) {
 				file_path = makePath(request->user,request->data);
 				file_path = makePath(server_folder, file_path);
 				saveFile(buffer, file_size, file_path);
-				broadcast(UPLOAD,request->data, request->user);
+				//broadcast(UPLOAD,request->data, request->user);
 				break;
 			case DELETE:
 				file_path = makePath(request->user,request->data);
 				file_path = makePath(server_folder, file_path);
 				if(remove(file_path) == 0){
 					printf("Sucessfully deleted file\n");
-					broadcast(DELETE,request->data, request->user);
+					//broadcast(DELETE,request->data, request->user);
 				}
+				break;
+			case DOWNLOAD_ALL:
+				nbFiles = countFiles(request->user);
+				printf("nv files: %d\n", nbFiles);
+				itoa(nbFiles, nbFilesBuffer);
+				Package *p = newPackage(CMD, request->user, seqnumSend, 0, nbFilesBuffer);
+				seqnumSend = 1 - seqnumSend;
+				printf("Client conn: %s:%d\n",inet_ntoa(connection->address->sin_addr), ntohs(connection->address->sin_port));
+				sendPackage(p, connection);
+
+				sendAllFiles(request->user, connection, seqnumSend);
+
 				break;
 			default: printf("Invalid command number %d\n", request->type);
 		}
 	}
+}
+
+void sendAllFiles(char *username, Connection *connection, int seqnum){
+    DIR *parent_dir;
+    struct dirent *dp;
+    struct stat sb;
+
+ 	char file_path[MAX_PATH];
+    char* dir_path = makePath(server_folder, username);
+    Package *p; 
+
+    if((parent_dir = opendir(dir_path)) == NULL){
+        printf("Error opening directory %s\n", dir_path);
+    }
+
+    while((dp = readdir(parent_dir)) != NULL){
+        strcpy(file_path, dir_path);
+        strcat(file_path,"/");
+        strcat(file_path, dp->d_name);
+
+        if(stat(file_path, &sb) != -1){
+            if((sb.st_mode & S_IFMT) == S_IFDIR){
+                // skip directories
+                continue;
+            }else{
+            	// sends file name
+            	p = newPackage(CMD, username, seqnum, 0, dp->d_name);
+                sendPackage(p, connection);
+
+                // sends file
+                sendFile(file_path, connection, username);
+                free(p);
+                p = NULL;
+            }
+        }
+    }
+}
+
+int countFiles(char *username){
+	int nb_files = 0;
+	DIR *parent_dir;
+	struct dirent *dp;
+
+	char *dir_path = makePath(server_folder, username);
+	parent_dir = opendir(dir_path);
+	while((dp = readdir(parent_dir)) != NULL){
+		// if it's a file
+		if(dp->d_type == DT_REG){
+			nb_files++;
+		}
+	}
+	closedir(parent_dir);
+
+	return nb_files;
 }
 
 void sendList(char* file_path, char* username, Connection *connection){
