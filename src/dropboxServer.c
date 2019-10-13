@@ -3,6 +3,7 @@
 
 ClientList *client_list;
 pthread_mutex_t portBarrier = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t clientListMutex = PTHREAD_MUTEX_INITIALIZER;
 
 int main(int argc, char *argv[]) {
 	int sockfd;
@@ -68,7 +69,8 @@ int main(int argc, char *argv[]) {
 				pthread_create(&th2, NULL, syncThread, (void*) port_count);
 				pthread_mutex_lock(&portBarrier);
 			}else if(buffer->type == BROADCAST){
-				addClient(client, &client_list, *port_count);
+				addClient(client, &client_list);
+				*port_count = *port_count - 1;	//no new port is assigned for a broadcast
 			}else{
 				// new client socket--
 				createClientFolder(client->username); 
@@ -95,40 +97,49 @@ void broadcast(int operation, char* file, char *username){
 
     while(current != NULL){
         if (strcmp(current->client->username, username) == 0) {
-        	// both in use
             if(current->client->devices[0] != INVALID){
-            	sendBroadcastMessage(current->client->devices[0], &current->client->addr[0],  operation, file, username);
-            } else if(current->client->devices[1] != INVALID){
-            	sendBroadcastMessage(current->client->devices[1], &current->client->addr[1], operation, file, username);
+            	sendBroadcastMessage(&current->client->addr[0],  operation, file, username);
             }
+            if(current->client->devices[1] != INVALID){
+            	sendBroadcastMessage(&current->client->addr[1], operation, file, username);
+            }
+            return;
 		}
         current = current->next;
     }
 }
 
-void sendBroadcastMessage(int port, struct sockaddr_in *addr, int operation, char *file, char *username){
+void sendBroadcastMessage(struct sockaddr_in *addr, int operation, char *file, char *username){
+
+	printf("bcast\n");
 
 	int sockfd;
-    Connection connection = connection;
+    Connection connection;
     struct sockaddr_in *client_addr = malloc(sizeof(struct sockaddr_in));
+    *client_addr = *addr;
 
+    // opens socket to broadcast
     if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) == -1)
         fprintf(stderr, "ERROR opening socket\n");
     setTimeout(sockfd);
 
-    client_addr->sin_family = AF_INET;
-    client_addr->sin_port = htons(port);
-    client_addr->sin_addr = *((struct in_addr *)addr);
-    bzero(&(client_addr->sin_zero), 8);
-
     connection.socket = sockfd;
     connection.address = client_addr;
 
+    // sends file name and operation
 	Package *p = newPackage(operation,username,0,0,file);
+	printf("Sending packages bcast %d\n", ntohs(connection.address->sin_port));
 	sendPackage(p,&connection);
-	char *file_path = makePath(username, file);
-	file_path = makePath(server_folder, file_path);
-	sendFile(file_path, &connection, username);
+
+	if(operation == UPLOAD){
+		// sends file
+		char *file_path = makePath(username, file);
+		file_path = makePath(server_folder, file_path);
+		sendFile(file_path, &connection, username);
+	}
+
+	free(client_addr);
+	close(connection.socket);
 }
 
 void *clientThread(void *arg) {
@@ -176,7 +187,7 @@ void *clientThread(void *arg) {
 				file_path = makePath(server_folder, file_path);
 				saveFile(buffer, file_size, file_path);
 				printf("Client conn: %s:%d\n",inet_ntoa(connection->address->sin_addr), ntohs(connection->address->sin_port));
-				//broadcast(UPLOAD,request->data, request->user);
+				broadcast(UPLOAD,request->data, request->user);
 				break;
 			case DOWNLOAD:
 				printf("Processing Download of file %s for user %s\n",request->data,request->user);
@@ -190,7 +201,7 @@ void *clientThread(void *arg) {
 				file_path = makePath(server_folder, file_path);
 				if(remove(file_path) == 0){
 					printf("Sucessfully deleted file\n");
-					//broadcast(DELETE,request->data, request->user);
+					broadcast(DELETE,request->data, request->user);
 				}
 				break;
 			case LISTSERVER:
@@ -199,9 +210,10 @@ void *clientThread(void *arg) {
 				sendList(file_path, request->user, connection);
 				break;
 			case EXIT:
-				printf("Processing user %s\n logout", request->user);
+				printf("Processing user %s logout\n", request->user);
 				client_list = removeClient(request->user, port);
-			default: printf("Invalid command number %d\n", request->type);
+				break;
+			default: printf("Invalid command number %d for client thread\n", request->type);
 		}
 	}
 }
@@ -247,14 +259,14 @@ void *syncThread(void *arg) {
 				file_path = makePath(request->user,request->data);
 				file_path = makePath(server_folder, file_path);
 				saveFile(buffer, file_size, file_path);
-				//broadcast(UPLOAD,request->data, request->user);
+				broadcast(UPLOAD,request->data, request->user);
 				break;
 			case DELETE:
 				file_path = makePath(request->user,request->data);
 				file_path = makePath(server_folder, file_path);
 				if(remove(file_path) == 0){
 					printf("Sucessfully deleted file\n");
-					//broadcast(DELETE,request->data, request->user);
+					broadcast(DELETE,request->data, request->user);
 				}
 				break;
 			case DOWNLOAD_ALL:
@@ -269,7 +281,7 @@ void *syncThread(void *arg) {
 				sendAllFiles(request->user, connection, seqnumSend);
 
 				break;
-			default: printf("Invalid command number %d\n", request->type);
+			default: printf("Invalid command number %d for sync thread\n", request->type);
 		}
 	}
 }
@@ -356,6 +368,7 @@ void initializeClientList() {
 int approveClient(Client* client, ClientList** client_list, int port) {
     ClientList *current = *client_list;
 
+    pthread_mutex_lock(&clientListMutex);
     while(current != NULL){
         if (strcmp(current->client->username, client->username) == 0) {
         	// both in use
@@ -368,29 +381,34 @@ int approveClient(Client* client, ClientList** client_list, int port) {
         }
         current = current->next;
     }
+    pthread_mutex_unlock(&clientListMutex);
   	return TRUE;
 }
 
-ClientList* addClient(Client* client, ClientList** client_list, int port) {
+ClientList* addClient(Client* client, ClientList** client_list) {
     ClientList *current = *client_list;
     ClientList *last = *client_list;
+    client->addr->sin_port = htons(CLIENTS_PORT);
 
+    pthread_mutex_lock(&clientListMutex);
     while(current != NULL){
         if (strcmp(current->client->username, client->username) == 0) {
         	// both in use
             if(current->client->devices[0] != INVALID && current->client->devices[1] != INVALID){
+            	pthread_mutex_unlock(&clientListMutex);
             	return *client_list;
             } else {
             	DEBUG_PRINT("ADDED NEW DEVICE\n");
             	//at least one is free
             	if(current->client->devices[0] == INVALID){
-            		current->client->devices[0] = port;
+            		current->client->devices[0] = LOGGED;
             		current->client->addr[0] = client->addr[0];
             	}
             	else{
-            		current->client->devices[1] = port;
-            		current->client->addr[1] = client->addr[1];
+            		current->client->devices[1] = LOGGED;
+            		current->client->addr[1] = client->addr[0];
             	}
+            	pthread_mutex_unlock(&clientListMutex);
             	return *client_list;
             }
         }
@@ -400,7 +418,7 @@ ClientList* addClient(Client* client, ClientList** client_list, int port) {
 
     // user isnt logged in yet
   	ClientList *new_client = malloc(sizeof(ClientList));
-  	client->devices[0] = port;
+  	client->devices[0] = LOGGED;
   	client->devices[1] = INVALID;
   	new_client->client = client;
   	new_client->next = NULL;
@@ -412,6 +430,7 @@ ClientList* addClient(Client* client, ClientList** client_list, int port) {
   		last->next = new_client;
 
   	DEBUG_PRINT("ADDED NEW CLIENT\n");
+  	pthread_mutex_unlock(&clientListMutex);
   	return *client_list;
 }
 

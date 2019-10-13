@@ -64,11 +64,6 @@ Package* newPackage(unsigned short int type, char* user, unsigned short int seq,
         return NULL;
     }
 
-    if (strlen(data) > DATA_SEGMENT_SIZE) {
-        DEBUG_PRINT("FALHA AO CRIAR NOVO PACOTE, AREA DE DADOS MUITO GRANDE\n");
-        return NULL;
-    }
-
     Package *package = malloc(sizeof(*package));
     strcpy (package->user, user);
     package->type = type;
@@ -122,7 +117,7 @@ int receivePackage(Connection *connection, Package *buffer, int expectedSeq){
 
     // blocking call
     while(1){
-        DEBUG_PRINT("RECEBENDO PACOTE %d\n", expectedSeq);
+        DEBUG_PRINT("RECEBENDO PACOTE %d port: %d\n", expectedSeq, ntohs(connection->address->sin_port));
         if(recvfrom(connection->socket, buffer, PACKAGE_SIZE, 0, (struct sockaddr *) from, &length) < 0){
             fprintf(stderr, "ERRO NO RECEBIMENTO DE PACOTE");
         }else{
@@ -164,7 +159,6 @@ void sendFile(char *file, Connection *connection, char* username) {
     unsigned short int length = 0;
     char data[DATA_SEGMENT_SIZE];
 
-    DEBUG_PRINT("INICIANDO FUNÇÃO \"sendFile\" PARA ENVIO DE ARQUIVOS\n");
     pFile = fopen(file, "rb");
     file_size = getFileSize(file);
 
@@ -183,13 +177,11 @@ void sendFile(char *file, Connection *connection, char* username) {
         for ( total_send = 0 ; total_send < file_size ; total_send = total_send + DATA_SEGMENT_SIZE ) {
             bzero(data, DATA_SEGMENT_SIZE);
             if ( (file_size - total_send) < DATA_SEGMENT_SIZE ) {
-                printf("Last: ");
                 fread(data, sizeof(char), (file_size - total_send), pFile);
             }
             else {
                 fread(data, sizeof(char), DATA_SEGMENT_SIZE, pFile);
             }
-            printf("Seq: %d Len: %d\n", seq, length);
             package = newPackage(DATA, username, seq, length, data);
             sendPackage(package, connection);
             seq++;
@@ -246,8 +238,6 @@ void saveFile(char *buffer, int file_size, char *path) {
 
         for ( bytes_written = 0 ; bytes_written < file_size ; bytes_written += DATA_SEGMENT_SIZE ) {
             if ( (file_size - bytes_written) < DATA_SEGMENT_SIZE ) {
-                printf("Bytes written: %d\n", bytes_written);
-                printf("To write: %d\n", file_size-bytes_written);
                 fwrite(buffer+bytes_written, sizeof(char), (file_size - bytes_written), fp);
             }
             else {

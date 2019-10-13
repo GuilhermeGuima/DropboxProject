@@ -33,6 +33,7 @@
 #define SUCCESS 1
 #define FAILURE 0
 #define INVALID -1
+#define LOGGED 1
 
 //Commands
 
@@ -61,4 +62,5 @@
 #define SEQUENCE_SHIFT 2 //sequence number shift on data transmission
 #define LIST_START_SEQ 2 //sequence number shift for file list transmission
 #define MAX_LIST_SIZE 4000
+#define CLIENTS_PORT 30000
 

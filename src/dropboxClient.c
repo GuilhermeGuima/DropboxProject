@@ -7,6 +7,9 @@ Connection *connection;
 char user[USER_NAME_SIZE];
 int seqnum = 0, seqnumReceive = 0;
 
+int broadcasted;
+pthread_mutex_t broadcastMutex = PTHREAD_MUTEX_INITIALIZER;
+
 int main(int argc, char *argv[]) {
 	int port;
 	Connection *firstConn = malloc(sizeof(Connection));
@@ -47,11 +50,11 @@ int main(int argc, char *argv[]) {
     connection = getConnection(port);
 	if (port > 0) {
 
-		//pthread_t bcast;
+		pthread_t bcast;
 
 		getSyncDir();
 
-		//pthread_create(&bcast, NULL, broadcast_thread, NULL);
+		pthread_create(&bcast, NULL, broadcast_thread, NULL);
 
 		selectCommand();
 	}
@@ -278,20 +281,20 @@ void *sync_thread(){
 	char buffer[EVENT_BUF_LEN];
 	int length;
 	int i = 0, seqnumSyn = 0, seqnumReceiveSyn = 0;
-	Connection *connection;
+	Connection *connectionSync = malloc(sizeof(Connection));
 	char buf[DATA_SEGMENT_SIZE], *filename;
     int port;
 
-	connection = getConnection(PORT);
+	connectionSync = getConnection(PORT);
 
 	bzero(buf, DATA_SEGMENT_SIZE);
     strcpy(buf, user);
 
     Package *p = newPackage(SYNC, user, seqnumSyn, 0, buf);
-    sendPackage(p, connection);
+    sendPackage(p, connectionSync);
     seqnumSyn = 1 - seqnumSyn;
 
-    receivePackage(connection, p, seqnumReceiveSyn);
+    receivePackage(connectionSync, p, seqnumReceiveSyn);
     seqnumReceiveSyn = 1 - seqnumReceiveSyn;
 
     if (strcmp(p->data, ACCESS_ERROR) == 0) {
@@ -299,43 +302,49 @@ void *sync_thread(){
     }
 
     port = atoi(p->data);
-    connection = getConnection(port);
+    connectionSync = getConnection(port);
     seqnumSyn = 0; seqnumReceiveSyn = 0;
 
-    // initializing the watcher for directory events 
-	if(initSyncDirWatcher() == FAILURE){
-		fprintf(stderr,"Failure creating event watcher for sync_dir.\n");
-	}
+    DEBUG_PRINT("PORTA RECEBIDA SYNC: %d\n", port);
 
 	DEBUG_PRINT("DOWNLOADING ALL FILES IN SERVER'S FOLDER\n");
 
-	downloadAllFiles(connection, seqnumSyn, seqnumReceiveSyn);
+	downloadAllFiles(connectionSync, &seqnumSyn, &seqnumReceiveSyn);
 
-    DEBUG_PRINT("PORTA RECEBIDA SYNC: %d\n", port);
+	// initializing the watcher for directory events 
+	if(initSyncDirWatcher() == FAILURE){
+		fprintf(stderr,"Failure creating event watcher for sync_dir.\n");
+	}
 
 	while(TRUE){
 		length  = read(notifyFile, buffer, EVENT_BUF_LEN);
 		if(length < 0){
 			fprintf(stderr, "Error reading notify event file.\n");
 		}
-
-		while(i < length){
-			struct inotify_event *event = (struct inotify_event *) &buffer[i];
-			if(event->len){
-				if(event->mask & IN_CREATE || event->mask & IN_CLOSE_WRITE || event->mask & IN_MOVED_TO){
-					if(! (event->mask & IN_ISDIR)){
-						filename = makePath(folder,event->name);
-						uploadFile(filename, &seqnumSyn, connection);
+		pthread_mutex_lock(&broadcastMutex);
+		if(broadcasted == FALSE){		
+			while(i < length){
+				pthread_mutex_unlock(&broadcastMutex);
+				struct inotify_event *event = (struct inotify_event *) &buffer[i];
+				if(event->len){
+					if(event->mask & IN_CREATE || event->mask & IN_CLOSE_WRITE || event->mask & IN_MOVED_TO){
+						if(! (event->mask & IN_ISDIR)){
+							filename = makePath(folder,event->name);
+							uploadFile(filename, &seqnumSyn, connectionSync);
+						}
+					}
+					if(event->mask & IN_DELETE || event->mask & IN_MOVED_FROM){
+						if(! (event->mask & IN_ISDIR)){
+							filename = makePath(folder,event->name);
+							deleteFile(filename, &seqnumSyn, connectionSync);
+						}
 					}
 				}
-				if(event->mask & IN_DELETE || event->mask & IN_MOVED_FROM){
-					if(! (event->mask & IN_ISDIR)){
-						filename = makePath(folder,event->name);
-						deleteFile(filename, &seqnumSyn, connection);
-					}
-				}
+				i += EVENT_SIZE + event->len;
 			}
-			i += EVENT_SIZE + event->len;
+		}else{
+			broadcasted = FALSE;
+			pthread_mutex_unlock(&broadcastMutex);
 		}
 
 		i = 0;
@@ -343,23 +352,23 @@ void *sync_thread(){
 	}
 }
 
-void downloadAllFiles(Connection *connection, int seqnum, int seqnumReceive){
+void downloadAllFiles(Connection *connection, int *seqnum, int *seqnumReceive){
 
 	int nbFiles, i, file_size;
 	char *buffer, *file_path;
 
-	Package *p = newPackage(DOWNLOAD_ALL, user, seqnum, 0, "");
+	Package *p = newPackage(DOWNLOAD_ALL, user, *seqnum, 0, "");
     sendPackage(p, connection);
-    seqnum = 1 - seqnum;
+    *seqnum = 1 - *seqnum;
 
     // the response package from a DOWNLOAD_ALL request has the nb of files as data
-    receivePackage(connection, p, seqnumReceive);
-    seqnumReceive = 1 - seqnumReceive;
+    receivePackage(connection, p, *seqnumReceive);
+    *seqnumReceive = 1 - *seqnumReceive;
 
     nbFiles = atoi(p->data);
     for(i = 0; i < nbFiles; i++){
-    	receivePackage(connection, p, seqnumReceive);
-    	seqnumReceive = 1 - seqnumReceive;
+    	receivePackage(connection, p, *seqnumReceive);
+    	*seqnumReceive = 1 - *seqnumReceive;
 
     	receiveFile(connection, &buffer, &file_size);
 
@@ -371,41 +380,60 @@ void downloadAllFiles(Connection *connection, int seqnum, int seqnumReceive){
 }
 
 void *broadcast_thread(){
-	/*char buffer[EVENT_BUF_LEN];
-	int seqnumSyn = 0, seqnumReceiveSyn = 0;
-	Connection *connection;
-	char *buf, bufFirst[DATA_SEGMENT_SIZE], *file_path;
-    int port, file_size;
+	int seqnum = 0, seqnumReceive = 0, sockfd, file_size;
+	char *buffer, bufFirst[DATA_SEGMENT_SIZE], *file_path;
+    struct sockaddr_in cli_addr;
 
-	connection = getConnection(PORT);
+    Connection *connectionBroad = malloc(sizeof(Connection));
+    connectionBroad = getConnection(PORT);
 
 	bzero(bufFirst, DATA_SEGMENT_SIZE);
     strcpy(bufFirst, user);
 
-    Package *p = newPackage(BROADCAST, user, seqnumSyn, 0, bufFirst);
-    sendPackage(p, connection);
-    seqnumSyn = 1 - seqnumSyn;
+    // handshake to establish broadcast connection
+    Package *p = newPackage(BROADCAST, user, seqnum, 0, bufFirst);
+    sendPackage(p, connectionBroad);
+    seqnum = 1 - seqnum;
 
-    receivePackage(connection, p, seqnumReceiveSyn);
-    seqnumReceiveSyn = 1 - seqnumReceiveSyn;
+    receivePackage(connectionBroad, p, seqnumReceive);
+    seqnumReceive = 1 - seqnumReceive;
+
+    // creation of the broadcast client socket
+    if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) == -1)
+		printf("ERROR opening socket");
+
+	cli_addr.sin_family = AF_INET;
+	cli_addr.sin_port = htons(CLIENTS_PORT);
+	cli_addr.sin_addr.s_addr = INADDR_ANY;
+	bzero(&(cli_addr.sin_zero), 8);
+
+	if (bind(sockfd, (struct sockaddr *) &cli_addr, sizeof(struct sockaddr)) < 0)
+		printf("ERROR on binding");
+
+	connectionBroad->socket = sockfd;
+	connectionBroad->address = &cli_addr;
+
+	printf("port: %d\n", ntohs(connectionBroad->address->sin_port));
 
     if (strcmp(p->data, ACCESS_ERROR) == 0) {
         DEBUG_PRINT("O SERVIDOR NÃO APROVOU A CONEXÃO\n");
     }
 
-    port = atoi(p->data);
-
-    DEBUG_PRINT("PORTA RECEBIDA BROADCAST: %d\n", port);
-
-    seqnumReceiveSyn = 0;
+    seqnumReceive = 0; seqnum = 0;
+    Package *request = malloc(sizeof(Package));
 
     while(TRUE){
-    	Package *request = malloc(sizeof(Package));
-		receivePackage(connection, request, seqnumReceiveSyn);
+    	seqnumReceive = 0;
+    	printf("Waiting for packages bcast %d\n", ntohs(connectionBroad->address->sin_port));
+		receivePackage(connectionBroad, request, seqnumReceive);
+		seqnumReceive = 1 - seqnumReceive;
+		pthread_mutex_lock(&broadcastMutex);
+		broadcasted = TRUE;
+		pthread_mutex_unlock(&broadcastMutex);
 
 		switch(request->type){
 			case UPLOAD:
-				receiveFile(connection, &buf, &file_size);
+				receiveFile(connectionBroad, &buffer, &file_size);
 				file_path = makePath(folder,request->data);
 				saveFile(buffer, file_size, file_path);
 				break;
@@ -413,10 +441,9 @@ void *broadcast_thread(){
 				file_path = makePath(folder,request->data);
 				remove(file_path);
 				break;
-			default: printf("Invalid command number %d\n", request->type);
+			default: printf("Invalid command number %d for broadcast\n", request->type);
 		}
-    }*/
-    return NULL;
+    }
 }
 
 Connection* getConnection(int port){
