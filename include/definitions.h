@@ -63,4 +63,3 @@
 #define LIST_START_SEQ 2 //sequence number shift for file list transmission
 #define MAX_LIST_SIZE 4000
 #define CLIENTS_PORT 30000
-

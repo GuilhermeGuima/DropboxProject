@@ -63,7 +63,7 @@ int main(int argc, char *argv[]) {
 		client = newClient(buffer->data);
 		client->addr[0] = *connection.address;
 
-		if (approveClient(client, &client_list, *port_count)) {
+		if (approveClient(client, &client_list)) {
 			if(buffer->type == SYNC){
 				// client sync socket
 				pthread_create(&th2, NULL, syncThread, (void*) port_count);
@@ -211,7 +211,7 @@ void *clientThread(void *arg) {
 				break;
 			case EXIT:
 				printf("Processing user %s logout\n", request->user);
-				client_list = removeClient(request->user, port);
+				client_list = removeClient(request->user, &client_list, connection->address);
 				break;
 			default: printf("Invalid command number %d for client thread\n", request->type);
 		}
@@ -341,8 +341,8 @@ int countFiles(char *username){
 	return nb_files;
 }
 
-void sendList(char* file_path, char* username, Connection *connection){
-	char *s = listDirectoryContents(file_path);
+void sendList(char* dir_path, char* username, Connection *connection){
+	char *s = listDirectoryContents(dir_path);
 	char buf[DATA_SEGMENT_SIZE];
 	int i;
 	Package *p;
@@ -365,7 +365,7 @@ void initializeClientList() {
 	client_list = NULL;
 }
 
-int approveClient(Client* client, ClientList** client_list, int port) {
+int approveClient(Client* client, ClientList** client_list) {
     ClientList *current = *client_list;
 
     pthread_mutex_lock(&clientListMutex);
@@ -434,30 +434,32 @@ ClientList* addClient(Client* client, ClientList** client_list) {
   	return *client_list;
 }
 
-ClientList* removeClient(char* username, int port) {
-    ClientList *current = client_list;
+ClientList* removeClient(char* username, ClientList **client_list, struct sockaddr_in* c_addr) {
+    ClientList *current = *client_list;
     ClientList *prev_client = NULL;
 
     while(current != NULL) {
         if (strcmp(current->client->username, username) == 0) {
-            if(current->client->devices[0] == port){
+        	if(c_addr->sin_addr.s_addr == current->client->addr[0].sin_addr.s_addr){
             	current->client->devices[0] = INVALID;
 
+            	// removes from the list if both devices are now invalid
             	if(current->client->devices[1] == INVALID){
             		if (prev_client != NULL) {
                     	prev_client->next = current->next;
 	                } else {
-	                    client_list = current->next;
+	                    *client_list = current->next;
 	                }
             	}
-            } else if(current->client->devices[1] == port){
+            } else if(c_addr->sin_addr.s_addr == current->client->addr[1].sin_addr.s_addr){
             	current->client->devices[1] = INVALID;
 
+            	// removes from the list if both devices are now invalid
             	if(current->client->devices[0] == INVALID){
             		if (prev_client != NULL) {
                     	prev_client->next = current->next;
 	                } else {
-	                    client_list = current->next;
+	                    *client_list = current->next;
 	                }
             	}
             }
@@ -466,7 +468,7 @@ ClientList* removeClient(char* username, int port) {
         current = current->next;
     }
 
-    return client_list;
+    return *client_list;
 }
 
 void printListClient(ClientList* client_list) {
@@ -493,4 +495,3 @@ void createClientFolder (char* name) {
 		printf("Creating folder %s\n", client_folder);
 	}
 }
-

@@ -15,25 +15,122 @@
 
 #include "dropboxUtil.h"
 
+// server port
 #define PORT 4000
+
+// for INOTIFY sync_dir watcher
 #define EVENT_SIZE (sizeof(struct inotify_event))
 #define EVENT_BUF_LEN (1024*(EVENT_SIZE + 16))
 
-void testeMensagens(int port, char *user);
+/*******************************************************************
+					CLIENT MANAGEMENT FUNCTIONS
+********************************************************************/
+
+/* Looping function to receive commands from the terminal user */
 void selectCommand();
-int connectServer(char *user, struct hostent *server, Connection *connection);
+
+/* Creates the sync_dir for the user if it doesn't exist yet and
+	the sync thread that watches for modifications in the folder
+	@input user's folder (should be $HOME/sync_dir_<username>)
+	@return FAILURE/SUCCESS
+*/
+int getSyncDir(char *folder);
+
+/* Initializes the INOTIFY watcher */
+int initSyncDirWatcher();
+
+/*******************************************************************
+					CONNECTION FUNCTIONS
+********************************************************************/
+
+/*
+	Makes the first connection to the server
+	@input connection - server address and socket to use
+	@input user - username for the current user
+	@return FAILURE/SUCCESS
+*/
 int firstConnection(char *user, Connection *connection);
+
+/*
+	Gets a connection object associated with a port in the server
+	@input port - port to be used for this connection
+	@return the connection associated with the port
+*/
 Connection* getConnection(int port);
+
+/*******************************************************************
+					DROPBOX FUNCTIONS
+********************************************************************/
+
+/*
+	Uploads a file to the server
+	@input filepath - path for the file to be uploaded
+	@input seqNumber - current communication protocol sequence number
+	@input connection - connection to the server
+	@return FAILURE/SUCCESS
+*/
+int uploadFile(char *file_path, int *seqNumber, Connection *connection);
+
+/*
+	Downloads a file from the server
+	@input file - name of the file to be downloaded
+	@input connection - connection to the server
+	@return FAILURE/SUCCESS
+*/
+int downloadFile(char *file, Connection *connection);
+
+/*
+	Deletes a file from the server
+	@input filepath - name of the file to be deleted
+	@input seqNumber - current communication protocol sequence number
+	@input connection - the connection to the server
+*/
+int deleteFile(char *file, int *seqNumber, Connection *connection);
+
+/*
+	Lists all the files in the server folder for the user
+	@input connection - the connection to the server
+*/
+void listServer(Connection *connection);
+
+/*
+	Lists all the files in the client's sync folder
+*/
+void listClient();
+
+/*
+	Function to receive a list of files from the server
+	@return string containing the list of files
+*/
+char *receiveList();
+
+/*
+	Download all files in the server folder for the user 
+	used after creating createSyncDir()
+	@input connection - the connection to the server
+	@input seqnum - the current sequence number for the protocol
+	@input seqnumReceive - the current sequence number for the receival of packages
+*/
+void downloadAllFiles(Connection *connection, int *seqnum, int *seqnumReceive);
+
+/*
+	Closes the connection on the client side (i.e. sends an EXIT package to the server)
+*/
 void closeConnection();
 
-int uploadFile(char *file_path, int *seqNumber, Connection *connection);
-int downloadFile(char *file_path);
-int deleteFile(char *file_path, int *seqNumber, Connection *connection);
-void listServer();
-void listClient();
-char *receiveList();
-int getSyncDir();
-int initSyncDirWatcher();
-void downloadAllFiles(Connection *connection, int *seqnum, int *seqnumReceive);
+/*******************************************************************
+					THREAD FUNCTIONS
+********************************************************************/
+
+/*
+	Thread to execute the synchronization of the sync_dir folder for the
+	user. Uses the INOTIFY interface.
+*/
 void *sync_thread();
+
+/*
+	Thread to listen for broadcast requests from the server. When another
+	device for the same user alters the server, this threads listens for 
+	files that have to be propagated to the other devices.
+*/
 void *broadcast_thread();

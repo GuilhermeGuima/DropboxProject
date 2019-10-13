@@ -52,7 +52,7 @@ int main(int argc, char *argv[]) {
 
 		pthread_t bcast;
 
-		getSyncDir();
+		getSyncDir(folder);
 
 		pthread_create(&bcast, NULL, broadcast_thread, NULL);
 
@@ -103,7 +103,7 @@ void selectCommand() {
 			strcpy(path, command+CMD_DOWNLOAD_LEN);
 			DEBUG_PRINT("Parâmetro do download: %s\n", path);
 
-			if(downloadFile(path)) {
+			if(downloadFile(path, connection)) {
 				printf("Feito download do arquivo \"%s\" com sucesso.\n", path);
 			} else {
 				printf("Falha ao fazer download do arquivo \"%s\". Por favor, tente novamente.\n", path);
@@ -122,7 +122,7 @@ void selectCommand() {
 		} else if(strncmp(command, CMD_LISTSERVER, CMD_LISTSERVER_LEN) == 0) {
 			DEBUG_PRINT("Detectado comando list_server\n");
 
-			listServer();
+			listServer(connection);
 		} else if(strncmp(command, CMD_LISTCLIENT, CMD_LISTCLIENT_LEN) == 0) {
 			DEBUG_PRINT("Detectado comando list_client\n");
 
@@ -130,7 +130,7 @@ void selectCommand() {
 		} else if(strncmp(command, CMD_GETSYNCDIR, CMD_GETSYNCDIR_LEN) == 0) {
 			DEBUG_PRINT("Detectado comando get_sync_dir\n");
 
-			if(getSyncDir()) {
+			if(getSyncDir(folder)) {
 				printf("Diretório sync_dir sincronizado com sucesso.\n");
 			} else {
 				printf("Falha ao tentar sincronizar o diretório sync_dir. Por favor, tente novamente.\n");
@@ -197,8 +197,8 @@ int uploadFile(char *file_path, int *seqNumber, Connection *connection) {
 	return SUCCESS;
 }
 
-int downloadFile(char *file_path) {
-	char* filename = basename(file_path);
+int downloadFile(char *file, Connection *connection) {
+	char* filename = basename(file);
 	int file_size;
 	char *buffer = NULL;
 
@@ -212,8 +212,8 @@ int downloadFile(char *file_path) {
 	return SUCCESS;
 }
 
-int deleteFile(char *file_path, int *seqNumber, Connection *connection) {
-	char* filename = basename(file_path);
+int deleteFile(char *file, int *seqNumber, Connection *connection) {
+	char* filename = basename(file);
 	Package *commandPackage = newPackage(DELETE,user,*seqNumber,0,filename);
 	sendPackage(commandPackage, connection);
 	*seqNumber = *seqNumber -1;
@@ -221,7 +221,7 @@ int deleteFile(char *file_path, int *seqNumber, Connection *connection) {
 	return SUCCESS;
 }
 
-void listServer() {
+void listServer(Connection *connection) {
 	Package *commandPackage = newPackage(LISTSERVER,user,seqnum,0,CMD_LISTCLIENT);
 	sendPackage(commandPackage, connection);
 	seqnum = 1 - seqnum;
@@ -248,7 +248,7 @@ void listClient() {
 	printf("%s", s);
 }
 
-int getSyncDir() {
+int getSyncDir(char *folder) {
 	pthread_t sync_t;
 
 	// create sync dir if doesnt exist yet
