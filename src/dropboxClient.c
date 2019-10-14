@@ -232,6 +232,7 @@ void listServer(Connection *connection) {
 
 char *receiveList(){
 	char *s = malloc(MAX_LIST_SIZE);
+	bzero(s,MAX_LIST_SIZE);
 	int i;
 	Package *buffer = malloc(sizeof(Package));
 

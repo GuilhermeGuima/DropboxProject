@@ -29,6 +29,7 @@ char* listDirectoryContents(char* dir_path){
 
     char file_path[MAX_PATH];
     char *s = malloc(4000);
+	bzero(s,4000);
     strcpy(s,"");
     char *str = malloc(200);
 

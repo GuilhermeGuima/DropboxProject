@@ -1,8 +1,9 @@
 #include "../include/dropboxUtil.h"
 #include "../include/dropboxServer.h"
+#include <semaphore.h>
 
 ClientList *client_list;
-pthread_mutex_t portBarrier = PTHREAD_MUTEX_INITIALIZER;
+sem_t portBarrier;
 pthread_mutex_t clientListMutex = PTHREAD_MUTEX_INITIALIZER;
 
 int main(int argc, char *argv[]) {
@@ -14,7 +15,8 @@ int main(int argc, char *argv[]) {
 	pthread_t th1, th2;
 	Client *client;
 	int seqnumSend = 0, seqnumReceive = 0;
-
+	
+	sem_init(&portBarrier,0,0);
 	initializeClientList();
 
 	DEBUG_PRINT("OPÇÃO DE DEBUG ATIVADA\n");
@@ -56,6 +58,8 @@ int main(int argc, char *argv[]) {
 		receivePackage(&connection, buffer, seqnumReceive);
 		seqnumReceive = 1 - seqnumReceive;
 
+		DEBUG_PRINT("&&&&& recebeu pacote server\n");
+
 		*port_count = *port_count + 1;
 
 		bzero(portMapper, DATA_SEGMENT_SIZE);
@@ -67,7 +71,8 @@ int main(int argc, char *argv[]) {
 			if(buffer->type == SYNC){
 				// client sync socket
 				pthread_create(&th2, NULL, syncThread, (void*) port_count);
-				pthread_mutex_lock(&portBarrier);
+				DEBUG_PRINT("LOCK SYNC THREAD\n");
+				sem_wait(&portBarrier);
 			}else if(buffer->type == BROADCAST){
 				addClient(client, &client_list);
 				*port_count = *port_count - 1;	//no new port is assigned for a broadcast
@@ -75,7 +80,8 @@ int main(int argc, char *argv[]) {
 				// new client socket--
 				createClientFolder(client->username); 
 				pthread_create(&th1, NULL, clientThread, (void*) port_count);
-				pthread_mutex_lock(&portBarrier);
+				DEBUG_PRINT("LOCK CLIENT THREAD\n");
+				sem_wait(&portBarrier);
 			}
 		}else{
 			DEBUG_PRINT("O CLIENTE JA ESTA USANDO DOIS DISPOSITIVOS\n");
@@ -144,7 +150,8 @@ void sendBroadcastMessage(struct sockaddr_in *addr, int operation, char *file, c
 
 void *clientThread(void *arg) {
 	int port = *(int*) arg;
-	pthread_mutex_unlock(&portBarrier);
+	DEBUG_PRINT("UNLOCK CLIENT\n");
+	sem_post(&portBarrier);
 
 	int sockfd, file_size;
 	char *buffer = NULL, *file_path = NULL;
@@ -177,6 +184,8 @@ void *clientThread(void *arg) {
 		Package *request = malloc(sizeof(Package));
 		receivePackage(connection, request, seqnum);
 		seqnum = 1 - seqnum;
+
+		DEBUG_PRINT("&&&&& recebeu pacote cliente\n");
 
 		switch(request->type){
 			case UPLOAD:
@@ -220,7 +229,8 @@ void *clientThread(void *arg) {
 
 void *syncThread(void *arg) {
 	int port = *(int*) arg;
-	pthread_mutex_unlock(&portBarrier);
+	DEBUG_PRINT("UNLOCK SYNC\n");
+	sem_post(&portBarrier);
 
 	int sockfd, file_size, nbFiles;
 	char *buffer = NULL, *file_path = NULL;
@@ -252,6 +262,8 @@ void *syncThread(void *arg) {
 		Package *request = malloc(sizeof(Package));
 		receivePackage(connection, request, seqnum);
 		seqnum = 1 - seqnum;
+
+		DEBUG_PRINT("&&&&& recebeu pacote sync\n");
 
 		switch(request->type){
 			case UPLOAD:
@@ -343,15 +355,17 @@ int countFiles(char *username){
 
 void sendList(char* dir_path, char* username, Connection *connection){
 	char *s = listDirectoryContents(dir_path);
+	printf("%s\n",s);
 	char buf[DATA_SEGMENT_SIZE];
 	int i;
 	Package *p;
 
-	for(i = 0; i < MAX_LIST_SIZE/4; i++){
-		memcpy(buf,s,DATA_SEGMENT_SIZE-1);
+	for(i = 0; i < MAX_LIST_SIZE/DATA_SEGMENT_SIZE; i++){
+		memcpy(buf,s+i*(DATA_SEGMENT_SIZE-1),DATA_SEGMENT_SIZE-1);
 		buf[DATA_SEGMENT_SIZE-1] = '\0';
 		p = newPackage(DATA, username,LIST_START_SEQ+i,0,buf);
 		sendPackage(p, connection);
+		DEBUG_PRINT("List: %d\n", LIST_START_SEQ+i);
 	}
 }
 
@@ -373,9 +387,11 @@ int approveClient(Client* client, ClientList** client_list) {
         if (strcmp(current->client->username, client->username) == 0) {
         	// both in use
             if(current->client->devices[0] != INVALID && current->client->devices[1] != INVALID){
+				pthread_mutex_unlock(&clientListMutex);
             	return FALSE;
             } else {
             	//at least one free
+				pthread_mutex_unlock(&clientListMutex);
             	return TRUE;
             }
         }
