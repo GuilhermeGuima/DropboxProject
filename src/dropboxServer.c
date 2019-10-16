@@ -1,6 +1,5 @@
 #include "../include/dropboxUtil.h"
 #include "../include/dropboxServer.h"
-#include <semaphore.h>
 
 ClientList *client_list;
 sem_t portBarrier;
@@ -15,7 +14,7 @@ int main(int argc, char *argv[]) {
 	pthread_t th1, th2;
 	Client *client;
 	int seqnumSend = 0, seqnumReceive = 0;
-	
+
 	sem_init(&portBarrier,0,0);
 	initializeClientList();
 
@@ -35,7 +34,7 @@ int main(int argc, char *argv[]) {
 	}
 
 	if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) == -1)
-		printf("ERROR opening socket");
+		fprintf(stderr, "ERROR opening socket");
 
 	serv_addr.sin_family = AF_INET;
 	serv_addr.sin_port = htons(PORT);
@@ -43,7 +42,7 @@ int main(int argc, char *argv[]) {
 	bzero(&(serv_addr.sin_zero), 8);
 
 	if (bind(sockfd, (struct sockaddr *) &serv_addr, sizeof(struct sockaddr)) < 0)
-		printf("ERROR on binding");
+		fprintf(stderr, "ERROR on binding");
 
 	*port_count = PORT;
 
@@ -58,8 +57,6 @@ int main(int argc, char *argv[]) {
 		receivePackage(&connection, buffer, seqnumReceive);
 		seqnumReceive = 1 - seqnumReceive;
 
-		DEBUG_PRINT("&&&&& recebeu pacote server\n");
-
 		*port_count = *port_count + 1;
 
 		bzero(portMapper, DATA_SEGMENT_SIZE);
@@ -67,26 +64,27 @@ int main(int argc, char *argv[]) {
 		client = newClient(buffer->data);
 		client->addr[0] = *connection.address;
 
-		if (approveClient(client, &client_list)) {
-			if(buffer->type == SYNC){
-				// client sync socket
-				pthread_create(&th2, NULL, syncThread, (void*) port_count);
-				DEBUG_PRINT("LOCK SYNC THREAD\n");
-				sem_wait(&portBarrier);
-			}else if(buffer->type == BROADCAST){
-				addClient(client, &client_list);
-				*port_count = *port_count - 1;	//no new port is assigned for a broadcast
+		
+		if(buffer->type == SYNC){
+			// client sync socket
+			pthread_create(&th2, NULL, syncThread, (void*) port_count);
+			sem_wait(&portBarrier);
+		}else if(buffer->type == CMD){
+			// new client socket--
+			createClientFolder(client->username); 
+			pthread_create(&th1, NULL, clientThread, (void*) port_count);
+			sem_wait(&portBarrier);
+		} else{
+			if (approveClient(client, &client_list)) {
+				if(buffer->type == BROADCAST){
+					addClient(client, &client_list);
+					*port_count = *port_count - 1;	//no new port is assigned for a broadcast
+				}
 			}else{
-				// new client socket--
-				createClientFolder(client->username); 
-				pthread_create(&th1, NULL, clientThread, (void*) port_count);
-				DEBUG_PRINT("LOCK CLIENT THREAD\n");
-				sem_wait(&portBarrier);
+				DEBUG_PRINT("O CLIENTE JA ESTA USANDO DOIS DISPOSITIVOS\n");
+				strcpy(portMapper, ACCESS_ERROR);
+				*port_count = *port_count - 1;
 			}
-		}else{
-			DEBUG_PRINT("O CLIENTE JA ESTA USANDO DOIS DISPOSITIVOS\n");
-			strcpy(portMapper, ACCESS_ERROR);
-			*port_count = *port_count - 1;
 		}
 
 		Package *p = newPackage(CMD,client->username,seqnumSend,0,portMapper);
@@ -117,8 +115,6 @@ void broadcast(int operation, char* file, char *username){
 
 void sendBroadcastMessage(struct sockaddr_in *addr, int operation, char *file, char *username){
 
-	printf("bcast\n");
-
 	int sockfd;
     Connection connection;
     struct sockaddr_in *client_addr = malloc(sizeof(struct sockaddr_in));
@@ -134,7 +130,6 @@ void sendBroadcastMessage(struct sockaddr_in *addr, int operation, char *file, c
 
     // sends file name and operation
 	Package *p = newPackage(operation,username,0,0,file);
-	printf("Sending packages bcast %d\n", ntohs(connection.address->sin_port));
 	sendPackage(p,&connection);
 
 	if(operation == UPLOAD){
@@ -150,7 +145,6 @@ void sendBroadcastMessage(struct sockaddr_in *addr, int operation, char *file, c
 
 void *clientThread(void *arg) {
 	int port = *(int*) arg;
-	DEBUG_PRINT("UNLOCK CLIENT\n");
 	sem_post(&portBarrier);
 
 	int sockfd, file_size;
@@ -162,7 +156,7 @@ void *clientThread(void *arg) {
 	DEBUG_PRINT("Porta %d\n", port);
 
 	if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) == -1)
-		printf("ERROR opening socket");
+		fprintf(stderr, "ERROR opening socket");
 
 	serv_addr.sin_family = AF_INET;
 	serv_addr.sin_port = htons(port);
@@ -170,7 +164,7 @@ void *clientThread(void *arg) {
 	bzero(&(serv_addr.sin_zero), 8);
 
 	if (bind(sockfd, (struct sockaddr *) &serv_addr, sizeof(struct sockaddr)) < 0)
-		printf("ERROR on binding");
+		fprintf(stderr, "ERROR on binding");
 
 	connection->socket = sockfd;
 	connection->address = &serv_addr;
@@ -185,51 +179,47 @@ void *clientThread(void *arg) {
 		receivePackage(connection, request, seqnum);
 		seqnum = 1 - seqnum;
 
-		DEBUG_PRINT("&&&&& recebeu pacote cliente\n");
-
 		switch(request->type){
 			case UPLOAD:
-				printf("Processing Upload of file %s for user %s\n",request->data,request->user);
+				//printf("Processing Upload of file %s for user %s\n",request->data,request->user);
 				receiveFile(connection, &buffer, &file_size);
-				printf("Received file of size: %d\n",file_size);
+				//printf("Received file of size: %d\n",file_size);
 				file_path = makePath(request->user,request->data);
 				file_path = makePath(server_folder, file_path);
 				saveFile(buffer, file_size, file_path);
-				printf("Client conn: %s:%d\n",inet_ntoa(connection->address->sin_addr), ntohs(connection->address->sin_port));
 				broadcast(UPLOAD,request->data, request->user);
 				break;
 			case DOWNLOAD:
-				printf("Processing Download of file %s for user %s\n",request->data,request->user);
+				//printf("Processing Download of file %s for user %s\n",request->data,request->user);
 				file_path = makePath(request->user,request->data);
 				file_path = makePath(server_folder, file_path);
 				sendFile(file_path, connection, request->user);
 				break;
 			case DELETE:
-				printf("Deleting file %s for user %s\n",request->data,request->user);
+				//printf("Deleting file %s for user %s\n",request->data,request->user);
 				file_path = makePath(request->user,request->data);
 				file_path = makePath(server_folder, file_path);
 				if(remove(file_path) == 0){
-					printf("Sucessfully deleted file\n");
+					DEBUG_PRINT("Sucessfully deleted file\n");
 					broadcast(DELETE,request->data, request->user);
 				}
 				break;
 			case LISTSERVER:
-				printf("Listing files for user %s\n",request->user);
+				//printf("Listing files for user %s\n",request->user);
 				file_path = makePath(server_folder, request->user);
 				sendList(file_path, request->user, connection);
 				break;
 			case EXIT:
-				printf("Processing user %s logout\n", request->user);
+				//printf("Processing user %s logout\n", request->user);
 				client_list = removeClient(request->user, &client_list, connection->address);
 				break;
-			default: printf("Invalid command number %d for client thread\n", request->type);
+			default: fprintf(stderr, "Invalid command number %d for client thread\n", request->type);
 		}
 	}
 }
 
 void *syncThread(void *arg) {
 	int port = *(int*) arg;
-	DEBUG_PRINT("UNLOCK SYNC\n");
 	sem_post(&portBarrier);
 
 	int sockfd, file_size, nbFiles;
@@ -240,7 +230,7 @@ void *syncThread(void *arg) {
 	int seqnum = 0, seqnumSend = 0;
 
 	if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) == -1)
-		printf("ERROR opening socket");
+		fprintf(stderr, "ERROR opening socket");
 
 	serv_addr.sin_family = AF_INET;
 	serv_addr.sin_port = htons(port);
@@ -248,13 +238,13 @@ void *syncThread(void *arg) {
 	bzero(&(serv_addr.sin_zero), 8);
 
 	if (bind(sockfd, (struct sockaddr *) &serv_addr, sizeof(struct sockaddr)) < 0)
-		printf("ERROR on binding");
+		fprintf(stderr, "ERROR on binding");
 
 	connection->socket = sockfd;
 	connection->address = &serv_addr;
 
 	while (TRUE) {
-		sleep(1);
+		sleep(TIMEOUT);
 
 		DEBUG_PRINT("ENTROU NO WHILE DA SYNC THREAD\n");
 		DEBUG_PRINT("PORTA DO CLIENTE %d\n", port);
@@ -263,37 +253,34 @@ void *syncThread(void *arg) {
 		receivePackage(connection, request, seqnum);
 		seqnum = 1 - seqnum;
 
-		DEBUG_PRINT("&&&&& recebeu pacote sync\n");
-
 		switch(request->type){
 			case UPLOAD:
 				receiveFile(connection, &buffer, &file_size);
-				file_path = makePath(request->user,request->data);
-				file_path = makePath(server_folder, file_path);
-				saveFile(buffer, file_size, file_path);
-				broadcast(UPLOAD,request->data, request->user);
+				if(file_size != 0){
+					file_path = makePath(request->user,request->data);
+					file_path = makePath(server_folder, file_path);
+					saveFile(buffer, file_size, file_path);
+					broadcast(UPLOAD,request->data, request->user);
+				}
 				break;
 			case DELETE:
 				file_path = makePath(request->user,request->data);
 				file_path = makePath(server_folder, file_path);
 				if(remove(file_path) == 0){
-					printf("Sucessfully deleted file\n");
 					broadcast(DELETE,request->data, request->user);
 				}
 				break;
 			case DOWNLOAD_ALL:
 				nbFiles = countFiles(request->user);
-				printf("nv files: %d\n", nbFiles);
 				itoa(nbFiles, nbFilesBuffer);
 				Package *p = newPackage(CMD, request->user, seqnumSend, 0, nbFilesBuffer);
 				seqnumSend = 1 - seqnumSend;
-				printf("Client conn: %s:%d\n",inet_ntoa(connection->address->sin_addr), ntohs(connection->address->sin_port));
 				sendPackage(p, connection);
 
 				sendAllFiles(request->user, connection, seqnumSend);
 
 				break;
-			default: printf("Invalid command number %d for sync thread\n", request->type);
+			default: fprintf(stderr, "Invalid command number %d for sync thread\n", request->type);
 		}
 	}
 }
@@ -308,7 +295,7 @@ void sendAllFiles(char *username, Connection *connection, int seqnum){
     Package *p; 
 
     if((parent_dir = opendir(dir_path)) == NULL){
-        printf("Error opening directory %s\n", dir_path);
+        fprintf(stderr, "Error opening directory %s\n", dir_path);
     }
 
     while((dp = readdir(parent_dir)) != NULL){
@@ -355,7 +342,6 @@ int countFiles(char *username){
 
 void sendList(char* dir_path, char* username, Connection *connection){
 	char *s = listDirectoryContents(dir_path);
-	printf("%s\n",s);
 	char buf[DATA_SEGMENT_SIZE];
 	int i;
 	Package *p;
@@ -365,7 +351,6 @@ void sendList(char* dir_path, char* username, Connection *connection){
 		buf[DATA_SEGMENT_SIZE-1] = '\0';
 		p = newPackage(DATA, username,LIST_START_SEQ+i,0,buf);
 		sendPackage(p, connection);
-		DEBUG_PRINT("List: %d\n", LIST_START_SEQ+i);
 	}
 }
 
@@ -387,11 +372,11 @@ int approveClient(Client* client, ClientList** client_list) {
         if (strcmp(current->client->username, client->username) == 0) {
         	// both in use
             if(current->client->devices[0] != INVALID && current->client->devices[1] != INVALID){
-				pthread_mutex_unlock(&clientListMutex);
+            	pthread_mutex_unlock(&clientListMutex);
             	return FALSE;
             } else {
             	//at least one free
-				pthread_mutex_unlock(&clientListMutex);
+            	pthread_mutex_unlock(&clientListMutex);
             	return TRUE;
             }
         }

@@ -17,7 +17,7 @@ int main(int argc, char *argv[]) {
 	DEBUG_PRINT("OPÇÃO DE DEBUG ATIVADA\n");
 
 	if (argc < 3) {
-		printf("Falta de argumentos ./dropboxClient user endereço\n");
+		fprintf(stderr, "Falta de argumentos ./dropboxClient user endereço\n");
 		return FAILURE;
 	}
 
@@ -35,7 +35,7 @@ int main(int argc, char *argv[]) {
 		strcat(folder, user);
 		printf("Bem vindo %s!\n", user);
 	} else {
-		printf("O tamanho máximo para um novo usuário é %d. Por favor, digite um nome válido.\n", USER_NAME_SIZE);
+		fprintf(stderr, "O tamanho máximo para um novo usuário é %d. Por favor, digite um nome válido.\n", USER_NAME_SIZE);
 		return FAILURE;
 	}
 
@@ -51,10 +51,18 @@ int main(int argc, char *argv[]) {
 	if (port > 0) {
 
 		pthread_t bcast;
+		pthread_t sync_t;
 
 		getSyncDir(folder);
 
-		pthread_create(&bcast, NULL, broadcast_thread, NULL);
+		// create thread to listen for events and sync
+		if(pthread_create(&sync_t, NULL, sync_thread, NULL)){
+			fprintf(stderr,"Failure creating sync thread.\n"); return FAILURE;
+		}
+
+		if(pthread_create(&bcast, NULL, broadcast_thread, NULL)){
+			fprintf(stderr,"Failure creating broadcast thread.\n"); return FAILURE;
+		}
 
 		selectCommand();
 	}
@@ -187,9 +195,11 @@ int uploadFile(char *file_path, int *seqNumber, Connection *connection) {
 	*seqNumber = 1 - *seqNumber;
 
 	struct stat buf;
-	if (stat(file_path, &buf) == 0)
+	if (stat(file_path, &buf) == 0){
 		sendFile(file_path, connection, user);
-	else{
+		DEBUG_PRINT("Enviou arquivo sync up\n");
+	}else{
+		DEBUG_PRINT("ARQUIVO %s NAO EXISTE\n", file_path);
 		sendFile(file_path, connection, user);
 		return FAILURE;
 	}
@@ -232,8 +242,8 @@ void listServer(Connection *connection) {
 
 char *receiveList(){
 	char *s = malloc(MAX_LIST_SIZE);
-	bzero(s,MAX_LIST_SIZE);
 	int i;
+	bzero(s,MAX_LIST_SIZE);
 	Package *buffer = malloc(sizeof(Package));
 
 	for(i = 0; i < MAX_LIST_SIZE/DATA_SEGMENT_SIZE; i++){
@@ -250,18 +260,12 @@ void listClient() {
 }
 
 int getSyncDir(char *folder) {
-	pthread_t sync_t;
 
 	// create sync dir if doesnt exist yet
 	if(mkdir(folder, 0777) != 0 && errno != EEXIST){
 		fprintf(stderr, "Error while creating sync_dir.\n"); return FAILURE;
 	} else {
 		printf("Criando diretório %s\n", folder);
-	}
-
-	// create thread to listen for events and sync
-	if(pthread_create(&sync_t, NULL, sync_thread, NULL)){
-		fprintf(stderr,"Failure creating sync thread.\n"); return FAILURE;
 	}
 
 	return SUCCESS;
@@ -323,20 +327,22 @@ void *sync_thread(){
 			fprintf(stderr, "Error reading notify event file.\n");
 		}
 		pthread_mutex_lock(&broadcastMutex);
-		if(broadcasted == FALSE){		
+		if(broadcasted == FALSE){	
+			pthread_mutex_unlock(&broadcastMutex);	
 			while(i < length){
-				pthread_mutex_unlock(&broadcastMutex);
 				struct inotify_event *event = (struct inotify_event *) &buffer[i];
 				if(event->len){
 					if(event->mask & IN_CREATE || event->mask & IN_CLOSE_WRITE || event->mask & IN_MOVED_TO){
 						if(! (event->mask & IN_ISDIR)){
 							filename = makePath(folder,event->name);
+							DEBUG_PRINT("upload inotify\n");
 							uploadFile(filename, &seqnumSyn, connectionSync);
 						}
 					}
 					if(event->mask & IN_DELETE || event->mask & IN_MOVED_FROM){
 						if(! (event->mask & IN_ISDIR)){
 							filename = makePath(folder,event->name);
+							DEBUG_PRINT("delete inotify\n");
 							deleteFile(filename, &seqnumSyn, connectionSync);
 						}
 					}
@@ -401,7 +407,7 @@ void *broadcast_thread(){
 
     // creation of the broadcast client socket
     if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) == -1)
-		printf("ERROR opening socket");
+		fprintf(stderr, "ERROR opening socket");
 
 	cli_addr.sin_family = AF_INET;
 	cli_addr.sin_port = htons(CLIENTS_PORT);
@@ -409,12 +415,10 @@ void *broadcast_thread(){
 	bzero(&(cli_addr.sin_zero), 8);
 
 	if (bind(sockfd, (struct sockaddr *) &cli_addr, sizeof(struct sockaddr)) < 0)
-		printf("ERROR on binding");
+		fprintf(stderr, "ERROR on binding");
 
 	connectionBroad->socket = sockfd;
 	connectionBroad->address = &cli_addr;
-
-	printf("port: %d\n", ntohs(connectionBroad->address->sin_port));
 
     if (strcmp(p->data, ACCESS_ERROR) == 0) {
         DEBUG_PRINT("O SERVIDOR NÃO APROVOU A CONEXÃO\n");
@@ -425,7 +429,7 @@ void *broadcast_thread(){
 
     while(TRUE){
     	seqnumReceive = 0;
-    	printf("Waiting for packages bcast %d\n", ntohs(connectionBroad->address->sin_port));
+    	//printf("Waiting for packages bcast %d\n", ntohs(connectionBroad->address->sin_port));
 		receivePackage(connectionBroad, request, seqnumReceive);
 		seqnumReceive = 1 - seqnumReceive;
 		pthread_mutex_lock(&broadcastMutex);
@@ -442,7 +446,7 @@ void *broadcast_thread(){
 				file_path = makePath(folder,request->data);
 				remove(file_path);
 				break;
-			default: printf("Invalid command number %d for broadcast\n", request->type);
+			default: fprintf(stderr, "Invalid command number %d for broadcast\n", request->type);
 		}
     }
 }

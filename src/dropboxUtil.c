@@ -28,13 +28,12 @@ char* listDirectoryContents(char* dir_path){
     struct stat sb;
 
     char file_path[MAX_PATH];
-    char *s = malloc(4000);
-	bzero(s,4000);
-    strcpy(s,"");
-    char *str = malloc(200);
+    char *s = malloc(DATA_SEGMENT_SIZE);
+    bzero(s, DATA_SEGMENT_SIZE);
+    char *str = malloc(DATA_SEGMENT_SIZE/MAX_FILES);
 
     if((parent_dir = opendir(dir_path)) == NULL){
-        printf("Error opening directory %s\n", dir_path);
+        fprintf(stderr, "Error opening directory %s\n", dir_path);
         return NULL;
     }
 
@@ -169,8 +168,7 @@ void sendFile(char *file, Connection *connection, char* username) {
     sendPackage(package, connection);
     seq++;
 
-    free(package);
-    package = NULL;
+    DEBUG_PRINT("FILE_SIZE: %d\n",file_size);
 
     if(pFile) {
 
@@ -186,10 +184,12 @@ void sendFile(char *file, Connection *connection, char* username) {
             package = newPackage(DATA, username, seq, length, data);
             sendPackage(package, connection);
             seq++;
-            free(package);
-            package = NULL;
         }
         fclose(pFile);
+        free(package);
+        package = NULL;
+    }else{
+       fprintf(stderr,"Erro ao abrir arquivo.\n");
     }
 }
 
@@ -202,10 +202,11 @@ void receiveFile(Connection *connection, char** buffer, int *file_size){
     receivePackage(connection, package, seqFile);
     seqFile++;
     *file_size = atoi(package->data);
+    DEBUG_PRINT("FILE_SIZE: %d\n",*file_size);
 
     int written = 0;
 
-    if(file_size != 0){
+    if(*file_size != 0){
         receivePackage(connection, package, seqFile);
         *buffer = malloc((package->length+1)*DATA_SEGMENT_SIZE);
         
