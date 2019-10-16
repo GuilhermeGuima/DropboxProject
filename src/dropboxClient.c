@@ -82,9 +82,9 @@ void selectCommand() {
 	seqnum = 0; // resets because new socket has been created on server-side
 
 	sleep(1);
-	printf("\n\nComandos disponíveis:\n\nupload <file>\ndownload <file>\ndelete <file>\nlist_server\nlist_client\nexit\n\n");
 
 	do {
+        printf("\n\nComandos disponíveis:\n\nupload <file>\ndownload <file>\ndelete <file>\nlist_server\nlist_client\nexit\n\n");
 		printf("\nDigite seu comando: ");
 
 		valid = fgets(command, sizeof(command)-1, stdin);
@@ -316,7 +316,7 @@ void *sync_thread(){
 
 	downloadAllFiles(connectionSync, &seqnumSyn, &seqnumReceiveSyn);
 
-	// initializing the watcher for directory events 
+	// initializing the watcher for directory events
 	if(initSyncDirWatcher() == FAILURE){
 		fprintf(stderr,"Failure creating event watcher for sync_dir.\n");
 	}
@@ -327,8 +327,8 @@ void *sync_thread(){
 			fprintf(stderr, "Error reading notify event file.\n");
 		}
 		pthread_mutex_lock(&broadcastMutex);
-		if(broadcasted == FALSE){	
-			pthread_mutex_unlock(&broadcastMutex);	
+		if(broadcasted == FALSE){
+			pthread_mutex_unlock(&broadcastMutex);
 			while(i < length){
 				struct inotify_event *event = (struct inotify_event *) &buffer[i];
 				if(event->len){
