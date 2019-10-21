@@ -1,7 +1,7 @@
 #ifndef UTIL_H
 #define UTIL_H
 
-//#define DEBUG // Comentar esta linha para desativar DEBUG mode.
+#define DEBUG // Comentar esta linha para desativar DEBUG mode.
 
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -21,6 +21,7 @@
 #include <libgen.h>
 #include <dirent.h>
 #include <semaphore.h>
+#include <arpa/inet.h>
 
 #include "definitions.h"
 
@@ -114,7 +115,7 @@ int getFileSize(char *path);
 */
 char* makePath(char* left, char* right);
 
-/*  Lists all files in a directory, with their access time,
+/*  Lists all files in a directory, with their access time, 
     modification time and creation time
   @input dir_path - directory path
   @return a string containing the list of all files and their times

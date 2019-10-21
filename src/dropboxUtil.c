@@ -30,7 +30,9 @@ char* listDirectoryContents(char* dir_path){
     char file_path[MAX_PATH];
     char *s = malloc(DATA_SEGMENT_SIZE);
     bzero(s, DATA_SEGMENT_SIZE);
-    char *str = malloc(DATA_SEGMENT_SIZE/MAX_FILES);
+    char *str = malloc(DATA_SEGMENT_SIZE);
+    bzero(str, DATA_SEGMENT_SIZE);
+    int lengthTot = 0;
 
     if((parent_dir = opendir(dir_path)) == NULL){
         fprintf(stderr, "Error opening directory %s\n", dir_path);
@@ -47,9 +49,9 @@ char* listDirectoryContents(char* dir_path){
                 // skip directories
                 continue;
             }else{
-                sprintf(str,"File: %s\n- Last modified: %s - Access time: %s - Changed time: %s",
-                    dp->d_name, ctime(&sb.st_mtime), ctime(&sb.st_atime), ctime(&sb.st_ctime));
-                strcat(s,str);
+                sprintf(str,"File: %s\n- Last modified: %s - Access time: %s - Changed time: %s", dp->d_name, ctime(&sb.st_mtime), ctime(&sb.st_atime), ctime(&sb.st_ctime));
+                memcpy(s+lengthTot,str, strlen(str));
+                lengthTot += strlen(str);
             }
         }
     }
@@ -82,7 +84,7 @@ int sendPackage(Package *package, Connection *connection){
     Package *ackBuffer = malloc(PACKAGE_SIZE);
 
     do{
-        DEBUG_PRINT("ENVIANDO PACOTE TIPO %d SEQ %d\n", package->type, package->seq);
+        //DEBUG_PRINT("ENVIANDO PACOTE TIPO %d SEQ %d\n", package->type, package->seq);
         n = sendto(connection->socket, package, PACKAGE_SIZE, 0, (const struct sockaddr *) connection->address, sizeof(struct sockaddr_in));
 
         if (n < 0) {
@@ -117,7 +119,7 @@ int receivePackage(Connection *connection, Package *buffer, int expectedSeq){
 
     // blocking call
     while(1){
-        DEBUG_PRINT("RECEBENDO PACOTE %d port: %d\n", expectedSeq, ntohs(connection->address->sin_port));
+        //DEBUG_PRINT("RECEBENDO PACOTE %d port: %d\n", expectedSeq, ntohs(connection->address->sin_port));
         if(recvfrom(connection->socket, buffer, PACKAGE_SIZE, 0, (struct sockaddr *) from, &length) < 0){
             fprintf(stderr, "ERRO NO RECEBIMENTO DE PACOTE");
         }else{

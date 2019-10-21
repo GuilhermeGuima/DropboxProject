@@ -47,7 +47,7 @@ int main(int argc, char *argv[]) {
 	connection = firstConn;
 
 	port = firstConnection(user, firstConn);
-    connection = getConnection(port);
+    	connection = getConnection(port);
 	if (port > 0) {
 
 		pthread_t bcast;
@@ -82,9 +82,9 @@ void selectCommand() {
 	seqnum = 0; // resets because new socket has been created on server-side
 
 	sleep(1);
+	printf("\n\nComandos disponíveis:\n\nupload <file>\ndownload <file>\ndelete <file>\nlist_server\nlist_client\nexit\n\n");
 
 	do {
-        printf("\n\nComandos disponíveis:\n\nupload <file>\ndownload <file>\ndelete <file>\nlist_server\nlist_client\nexit\n\n");
 		printf("\nDigite seu comando: ");
 
 		valid = fgets(command, sizeof(command)-1, stdin);
@@ -192,6 +192,7 @@ int uploadFile(char *file_path, int *seqNumber, Connection *connection) {
 	char* filename = basename(file_path);
 	Package *commandPackage = newPackage(UPLOAD,user,*seqNumber,0,filename);
 	sendPackage(commandPackage, connection);
+	DEBUG_PRINT("seq num: %d\n", *seqNumber);
 	*seqNumber = 1 - *seqNumber;
 
 	struct stat buf;
@@ -226,7 +227,7 @@ int deleteFile(char *file, int *seqNumber, Connection *connection) {
 	char* filename = basename(file);
 	Package *commandPackage = newPackage(DELETE,user,*seqNumber,0,filename);
 	sendPackage(commandPackage, connection);
-	*seqNumber = *seqNumber -1;
+	*seqNumber = 1 - *seqNumber;
 
 	return SUCCESS;
 }
@@ -248,7 +249,7 @@ char *receiveList(){
 
 	for(i = 0; i < MAX_LIST_SIZE/DATA_SEGMENT_SIZE; i++){
 		receivePackage(connection, buffer, LIST_START_SEQ+i);
-		strcpy(s,buffer->data);
+		strcpy(s+i*(DATA_SEGMENT_SIZE-1),buffer->data);
 	}
 
 	return s;
@@ -316,7 +317,7 @@ void *sync_thread(){
 
 	downloadAllFiles(connectionSync, &seqnumSyn, &seqnumReceiveSyn);
 
-	// initializing the watcher for directory events
+	// initializing the watcher for directory events 
 	if(initSyncDirWatcher() == FAILURE){
 		fprintf(stderr,"Failure creating event watcher for sync_dir.\n");
 	}
@@ -327,8 +328,8 @@ void *sync_thread(){
 			fprintf(stderr, "Error reading notify event file.\n");
 		}
 		pthread_mutex_lock(&broadcastMutex);
-		if(broadcasted == FALSE){
-			pthread_mutex_unlock(&broadcastMutex);
+		if(broadcasted == FALSE){	
+			pthread_mutex_unlock(&broadcastMutex);	
 			while(i < length){
 				struct inotify_event *event = (struct inotify_event *) &buffer[i];
 				if(event->len){
@@ -355,7 +356,7 @@ void *sync_thread(){
 		}
 
 		i = 0;
-		sleep(10);
+		sleep(5);
 	}
 }
 
@@ -433,8 +434,6 @@ void *broadcast_thread(){
 		receivePackage(connectionBroad, request, seqnumReceive);
 		seqnumReceive = 1 - seqnumReceive;
 		pthread_mutex_lock(&broadcastMutex);
-		broadcasted = TRUE;
-		pthread_mutex_unlock(&broadcastMutex);
 
 		switch(request->type){
 			case UPLOAD:
@@ -448,6 +447,8 @@ void *broadcast_thread(){
 				break;
 			default: fprintf(stderr, "Invalid command number %d for broadcast\n", request->type);
 		}
+		broadcasted = TRUE;
+		pthread_mutex_unlock(&broadcastMutex);
     }
 }
 

@@ -81,6 +81,9 @@ void printListClient(ClientList* client_list);
 */
 void sendList(char *dir_path, char* username, Connection *connection);
 
+void broadcast(int operation, char* file, char *username);
+void broadcastUnique(int operation, char* file, char *username, struct sockaddr_in ownAddress);
+
 /*  Sends message to propagate uploaded file to other client devices
 	@input addr - client address
 	@input operation - operation to be executed [UPLOAD/DELETE]

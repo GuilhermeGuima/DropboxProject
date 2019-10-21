@@ -113,6 +113,25 @@ void broadcast(int operation, char* file, char *username){
     }
 }
 
+void broadcastUnique(int operation, char* file, char *username, struct sockaddr_in ownAddress){
+	ClientList *current = client_list;
+
+    while(current != NULL){
+        if (strcmp(current->client->username, username) == 0) {
+            if(current->client->devices[0] != INVALID && strcmp(inet_ntoa(current->client->addr[0].sin_addr), inet_ntoa(ownAddress.sin_addr)) != 0){
+            	sendBroadcastMessage(&current->client->addr[0],  operation, file, username);
+            	DEBUG_PRINT("ip na estrutura: %s, ip do cliente mandando o broadcast 0 %s\n", inet_ntoa(current->client->addr[0].sin_addr), inet_ntoa(ownAddress.sin_addr));
+            }
+            if(current->client->devices[1] != INVALID && strcmp(inet_ntoa(current->client->addr[1].sin_addr), inet_ntoa(ownAddress.sin_addr)) != 0){
+            	sendBroadcastMessage(&current->client->addr[1], operation, file, username);
+            	DEBUG_PRINT("ip na estrutura: %s, ip do cliente mandando o broadcast 1 %s\n", inet_ntoa(current->client->addr[1].sin_addr), inet_ntoa(ownAddress.sin_addr));
+            }
+            return;
+		}
+        current = current->next;
+    }
+}
+
 void sendBroadcastMessage(struct sockaddr_in *addr, int operation, char *file, char *username){
 
 	int sockfd;
@@ -260,14 +279,14 @@ void *syncThread(void *arg) {
 					file_path = makePath(request->user,request->data);
 					file_path = makePath(server_folder, file_path);
 					saveFile(buffer, file_size, file_path);
-					broadcast(UPLOAD,request->data, request->user);
+					broadcastUnique(UPLOAD, request->data, request->user, *connection->address);
 				}
 				break;
 			case DELETE:
 				file_path = makePath(request->user,request->data);
 				file_path = makePath(server_folder, file_path);
 				if(remove(file_path) == 0){
-					broadcast(DELETE,request->data, request->user);
+					broadcastUnique(DELETE,request->data, request->user, *connection->address);
 				}
 				break;
 			case DOWNLOAD_ALL:
@@ -276,7 +295,6 @@ void *syncThread(void *arg) {
 				Package *p = newPackage(CMD, request->user, seqnumSend, 0, nbFilesBuffer);
 				seqnumSend = 1 - seqnumSend;
 				sendPackage(p, connection);
-
 				sendAllFiles(request->user, connection, seqnumSend);
 
 				break;
