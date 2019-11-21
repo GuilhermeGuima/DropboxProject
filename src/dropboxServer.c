@@ -99,6 +99,7 @@ int main(int argc, char *argv[]) {
 void broadcast(int operation, char* file, char *username){
 	ClientList *current = client_list;
 
+	pthread_mutex_lock(&clientListMutex);
     while(current != NULL){
         if (strcmp(current->client->username, username) == 0) {
             if(current->client->devices[0] != INVALID){
@@ -107,15 +108,18 @@ void broadcast(int operation, char* file, char *username){
             if(current->client->devices[1] != INVALID){
             	sendBroadcastMessage(&current->client->addr[1], operation, file, username);
             }
+            pthread_mutex_unlock(&clientListMutex);
             return;
 		}
         current = current->next;
     }
+    pthread_mutex_unlock(&clientListMutex);
 }
 
 void broadcastUnique(int operation, char* file, char *username, struct sockaddr_in ownAddress){
 	ClientList *current = client_list;
 
+	pthread_mutex_lock(&clientListMutex);
     while(current != NULL){
         if (strcmp(current->client->username, username) == 0) {
             if(current->client->devices[0] != INVALID && strcmp(inet_ntoa(current->client->addr[0].sin_addr), inet_ntoa(ownAddress.sin_addr)) != 0){
@@ -126,10 +130,12 @@ void broadcastUnique(int operation, char* file, char *username, struct sockaddr_
             	sendBroadcastMessage(&current->client->addr[1], operation, file, username);
             	DEBUG_PRINT("ip na estrutura: %s, ip do cliente mandando o broadcast 1 %s\n", inet_ntoa(current->client->addr[1].sin_addr), inet_ntoa(ownAddress.sin_addr));
             }
+            pthread_mutex_unlock(&clientListMutex);
             return;
 		}
         current = current->next;
     }
+    pthread_mutex_unlock(&clientListMutex);
 }
 
 void sendBroadcastMessage(struct sockaddr_in *addr, int operation, char *file, char *username){
@@ -457,6 +463,7 @@ ClientList* removeClient(char* username, ClientList **client_list, struct sockad
     ClientList *current = *client_list;
     ClientList *prev_client = NULL;
 
+    pthread_mutex_lock(&clientListMutex);
     while(current != NULL) {
         if (strcmp(current->client->username, username) == 0) {
         	if(c_addr->sin_addr.s_addr == current->client->addr[0].sin_addr.s_addr){
@@ -487,6 +494,7 @@ ClientList* removeClient(char* username, ClientList **client_list, struct sockad
         current = current->next;
     }
 
+    pthread_mutex_unlock(&clientListMutex);
     return *client_list;
 }
 
@@ -494,12 +502,14 @@ void printListClient(ClientList* client_list) {
     int index = 1;
     ClientList *current = client_list;
 
+    pthread_mutex_lock(&clientListMutex);
     while(current != NULL) {
         printf("%d - %s - device1: %d - device2: %d\n", index, current->client->username,
         	current->client->devices[0], current->client->devices[1]);
         current = current->next;
         index++;
     }
+    pthread_mutex_unlock(&clientListMutex);
 }
 
 void createClientFolder (char* name) {
