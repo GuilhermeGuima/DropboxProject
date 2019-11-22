@@ -4,8 +4,54 @@
 ClientList *client_list;
 sem_t portBarrier;
 pthread_mutex_t clientListMutex = PTHREAD_MUTEX_INITIALIZER;
+ServerList *svList;
+int coordinatorId;
 
 int main(int argc, char *argv[]) {
+	ServerList *auxList;
+	pthread_t th1;
+    int id;
+    Server *server;
+    coordinatorId = 1;
+	initializer_static_svlist();
+	auxList = svList;
+
+
+	DEBUG_PRINT2("LISTA ESTATICA DE SERVIDORES \n ---------------------------------------------- \n\n");
+
+	while(auxList != NULL) {
+        DEBUG_PRINT2("ID: %d PORTA PADRAO: %d PORTA ELEICAO: %d PORTA \n", auxList->server->id, auxList->server->defaultPort, auxList->server->bullyPort);
+        auxList = auxList->next;
+	}
+	DEBUG_PRINT2("\n");
+
+	if (argc < 2) {
+		fprintf(stderr, "Falta de argumentos ./dropboxServer id           (id = 1,2,3,4) \n");
+		return 0;
+	}
+
+	id = atoi(argv[1]);
+	server = getServer(id);
+
+	if(server == NULL) {
+        printf("O servidor com ID %d nao existe\n", id);
+        return 0;
+	}
+
+	while (TRUE) {
+        pthread_create(&th1, NULL, bullyThread, (void*) server);
+
+        if (server->id == coordinatorId) {
+            coordenatorFunction();
+        } else {
+            replicaFunction(server, th1);
+        }
+	}
+
+	return 0;
+}
+
+int coordenatorFunction() {         //MAIN DA PT1 DO TRABALHO
 	int sockfd;
 	struct sockaddr_in serv_addr;
 	int *port_count = malloc(sizeof(int));
@@ -64,14 +110,14 @@ int main(int argc, char *argv[]) {
 		client = newClient(buffer->data);
 		client->addr[0] = *connection.address;
 
-		
+
 		if(buffer->type == SYNC){
 			// client sync socket
 			pthread_create(&th2, NULL, syncThread, (void*) port_count);
 			sem_wait(&portBarrier);
 		}else if(buffer->type == CMD){
 			// new client socket--
-			createClientFolder(client->username); 
+			createClientFolder(client->username);
 			pthread_create(&th1, NULL, clientThread, (void*) port_count);
 			sem_wait(&portBarrier);
 		} else{
@@ -92,6 +138,64 @@ int main(int argc, char *argv[]) {
 		seqnumSend = 1 - seqnumSend;
 	}
 
+	close(sockfd);
+	return SUCCESS;
+}
+
+int replicaFunction(Server *server, pthread_t thread) {
+    int sockfd, n, status;
+    int *res;
+    int changedCoordinator = FALSE;
+	unsigned int length;
+	struct sockaddr_in serv_addr, from;
+	struct hostent *sv;
+
+	char buffer[256];
+
+	sv = gethostbyname("localhost");
+	if (sv == NULL) {
+        fprintf(stderr,"ERROR, no such host\n");
+        exit(0);
+    }
+
+	if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) == -1)
+		printf("ERROR opening socket");
+    setTimeout(sockfd);
+
+	serv_addr.sin_family = AF_INET;
+	serv_addr.sin_port = htons(coordinatorId);
+	serv_addr.sin_addr = *((struct in_addr *)sv->h_addr);
+	bzero(&(serv_addr.sin_zero), 8);
+
+	printf("RM a postos\n");
+
+	while(!changedCoordinator) {
+
+        bzero(buffer, 256);
+        strcpy(buffer, "OK");
+
+        n = sendto(sockfd, buffer, strlen(buffer), 0, (const struct sockaddr *) &serv_addr, sizeof(struct sockaddr_in));
+        if (n < 0)
+            printf("ERROR sendto");
+
+        length = sizeof(struct sockaddr_in);
+
+
+        if(recvfrom(sockfd, buffer, 256, 0, (struct sockaddr *) &from, &length) < 0 ) {
+             status = pthread_join(thread, (void **) &res);
+             if (status != 0)
+                exit(1);
+             coordinatorId = *res;
+             changedCoordinator = TRUE;
+
+        } else {
+            printf("SYSTEM: %s\n", buffer);
+            if(strcmp(buffer, "ACK") == 0) {
+                sleep(3);
+            }
+        }
+	}
+	printf("SYSTEM: SAINDO DA FUNÇÃO PARA SERVIDOR REPLICADO\n");
 	close(sockfd);
 	return SUCCESS;
 }
@@ -320,7 +424,7 @@ void sendAllFiles(char *username, Connection *connection, int seqnum){
 
  	char file_path[MAX_PATH];
     char* dir_path = makePath(server_folder, username);
-    Package *p; 
+    Package *p;
 
     if((parent_dir = opendir(dir_path)) == NULL){
         fprintf(stderr, "Error opening directory %s\n", dir_path);
@@ -526,5 +630,337 @@ void createClientFolder (char* name) {
 		fprintf(stderr, "Error while creating user folder\n");
 	} else {
 		printf("Creating folder %s\n", client_folder);
+	}
+}
+
+
+// DAQUI PRA BAIXO REFERENTE A PARTE 2 DO TRABALHO
+
+int setTimeoutElection(int sockfd){
+    struct timeval tv;
+    tv.tv_sec = TIMEOUT_ELECTION;
+    tv.tv_usec = 0;
+
+    if(setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, &tv,sizeof(tv)) < 0) {
+        fprintf(stderr, "Error setting timeout for socket %d.\n", sockfd);
+        return FAILURE;
+    }
+
+    return SUCCESS;
+}
+
+Server* getServer(int id) {
+    Server *server = malloc(sizeof(Server));
+    if (id == 1) {
+        server->id = 1;
+        server->defaultPort = 5001;
+        server->bullyPort = 6001;
+    }
+    if (id == 2) {
+        server->id = 2;
+        server->defaultPort = 5002;
+        server->bullyPort = 6002;
+    }
+    if (id == 3) {
+        server->id = 3;
+        server->defaultPort = 5003;
+        server->bullyPort = 6003;
+    }
+    if (id == 4) {
+        server->id = 4;
+        server->defaultPort = 5004;
+        server->bullyPort = 6004;
+    }
+    if (id < 1 || id > 4) {
+        return NULL;
+    }
+
+    return server;
+}
+
+void initializer_static_svlist() {
+    ServerList *auxList;
+    Server *sv1 = malloc(sizeof(Server));
+    Server *sv2 = malloc(sizeof(Server));
+    Server *sv3 = malloc(sizeof(Server));
+    Server *sv4 = malloc(sizeof(Server));
+    sv1->id = 1;
+    sv1->defaultPort = 5001;
+    sv1->bullyPort = 6001;
+    sv2->id = 2;
+    sv2->defaultPort = 5002;
+    sv2->bullyPort = 6002;
+    sv3->id = 3;
+    sv3->defaultPort = 5003;
+    sv3->bullyPort = 6003;
+    sv4->id = 4;
+    sv4->defaultPort = 5004;
+    sv4->bullyPort = 6004;
+
+    auxList = malloc(sizeof(ServerList));
+    auxList->server = sv4;
+    auxList->next = NULL;
+    svList = auxList;
+    auxList = malloc(sizeof(ServerList));
+    auxList->server = sv3;
+    auxList->next = NULL;
+    svList->next = auxList;
+    auxList = malloc(sizeof(ServerList));
+    auxList->server = sv2;
+    auxList->next = NULL;
+    svList->next->next = auxList;
+    auxList = malloc(sizeof(ServerList));
+    auxList->server = sv1;
+    auxList->next = NULL;
+    svList->next->next->next = auxList;
+}
+
+int getCoordinatorPort() {
+    ServerList *auxList = svList;
+
+	while(auxList != NULL) {
+        if (coordinatorId == auxList->server->id) {
+            return auxList->server->bullyPort;
+        }
+        auxList = auxList->next;
+	}
+
+	return INVALID;
+}
+
+void sendCoordinatorMessage(Server* server) {
+    int sockfd;
+	struct sockaddr_in serv_addr;
+	struct hostent *sv;
+	char data[256];
+	bzero(data, 256);
+	ServerList *auxList;
+
+	itoa(server->id, data);
+	Package *bufferSend = newPackage(COORDINATOR, "bully", 0, 0, data);
+
+	sv = gethostbyname("localhost");
+	if (sv == NULL) {
+        fprintf(stderr,"ERROR, no such host\n");
+        exit(0);
+    }
+
+	auxList = svList;
+	while (auxList != NULL) {
+        if (server->id < auxList->server->id) {
+            if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) == -1)
+                printf("ERROR opening socket");
+            serv_addr.sin_family = AF_INET;
+            serv_addr.sin_port = htons(auxList->server->bullyPort);
+            serv_addr.sin_addr = *((struct in_addr *)sv->h_addr);
+            bzero(&(serv_addr.sin_zero), 8);
+            sendto(sockfd, bufferSend, PACKAGE_SIZE, 0, (struct sockaddr *) &serv_addr, sizeof(struct sockaddr_in));
+            close(sockfd);
+        }
+        auxList = auxList->next;
+	}
+}
+
+void *testCoordinator(void *arg) {
+    Server* server = (Server*) arg;
+    int sockfd;
+    int verifyCoordinator = FALSE;
+	unsigned int length;
+	struct sockaddr_in serv_addr, from;
+	struct hostent *sv;
+	char data[256];
+	bzero(data, 256);
+	Package *bufferReceive = malloc(PACKAGE_SIZE);
+	Package *tester = newPackage(TESTER, "bully", 0, 0, data);
+	Package *test_fail = newPackage(TEST_FAIL, "bully", 0, 0, data);
+	Package *test_ok = newPackage(TEST_OK, "bully", 0, 0, data);
+
+	sv = gethostbyname("localhost");
+
+	if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) == -1)
+		printf("ERROR opening socket");
+    setTimeout(sockfd);
+
+	serv_addr.sin_family = AF_INET;
+	serv_addr.sin_port = htons(getCoordinatorPort());
+	serv_addr.sin_addr = *((struct in_addr *)sv->h_addr);
+	bzero(&(serv_addr.sin_zero), 8);
+
+	sendto(sockfd, tester, PACKAGE_SIZE, 0, (const struct sockaddr *) &serv_addr, sizeof(struct sockaddr_in));
+	if (recvfrom(sockfd, bufferReceive, PACKAGE_SIZE, 0, (struct sockaddr *) &from, &length) >= 0) {
+        if (bufferReceive->type == ACK) {
+            verifyCoordinator = TRUE;
+        }
+	}
+	close(sockfd);
+
+	if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) == -1)
+                printf("ERROR opening socket");
+    serv_addr.sin_family = AF_INET;
+    serv_addr.sin_port = htons(server->bullyPort);
+    serv_addr.sin_addr = *((struct in_addr *)sv->h_addr);
+    bzero(&(serv_addr.sin_zero), 8);
+
+	if (verifyCoordinator) {
+        sendto(sockfd, test_ok, PACKAGE_SIZE, 0, (struct sockaddr *) &serv_addr, sizeof(struct sockaddr_in));
+	} else {
+        sendto(sockfd, test_fail, PACKAGE_SIZE, 0, (struct sockaddr *) &serv_addr, sizeof(struct sockaddr_in));
+	}
+
+	close(sockfd);
+	pthread_exit(NULL);
+}
+
+void *startElection(void *arg) {
+    Server* server = (Server*) arg;
+    int sockfd, receiveAnswer;
+    socklen_t rmlen;
+	struct sockaddr_in serv_addr, rm_addr;
+	struct hostent *sv;
+	char data[256];
+	bzero(data, 256);
+	ServerList *auxList;
+
+	Package *bufferSendCoordinator = newPackage(SEND_COORDINATOR, "bully", 0, 0, data);
+	Package *bufferWaitCoordinator = newPackage(WAITING_NEW_COORDINATOR, "bully", 0, 0, data);
+	Package *bufferElection = newPackage(ELECTION, "bully", 0, 0, data);
+	Package *bufferReceive = malloc(PACKAGE_SIZE);
+
+	sv = gethostbyname("localhost");
+	if (sv == NULL) {
+        fprintf(stderr,"ERROR, no such host\n");
+        exit(0);
+    }
+
+    rmlen = sizeof(struct sockaddr_in);
+	auxList = svList;
+	receiveAnswer = FALSE;
+	while (auxList != NULL && !receiveAnswer) {
+        if (server->id > auxList->server->id) {
+            if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) == -1)
+                printf("ERROR opening socket");
+            setTimeout(sockfd);
+            serv_addr.sin_family = AF_INET;
+            serv_addr.sin_port = htons(auxList->server->bullyPort);
+            serv_addr.sin_addr = *((struct in_addr *)sv->h_addr);
+            bzero(&(serv_addr.sin_zero), 8);
+
+            sendto(sockfd, bufferElection, PACKAGE_SIZE, 0, (struct sockaddr *) &serv_addr, sizeof(struct sockaddr_in));
+            if (recvfrom(sockfd, bufferReceive, PACKAGE_SIZE, 0, (struct sockaddr *) &rm_addr, &rmlen) >= 0) {
+                if (bufferReceive->type == ANSWER) {
+                    DEBUG_PRINT2("BULLY - RECEBEU ANSWER\n");
+                    receiveAnswer = TRUE;
+                }
+            }
+            close(sockfd);
+        }
+        auxList = auxList->next;
+	}
+
+	if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) == -1)
+                printf("ERROR opening socket");
+    serv_addr.sin_family = AF_INET;
+    serv_addr.sin_port = htons(server->bullyPort);
+    serv_addr.sin_addr = *((struct in_addr *)sv->h_addr);
+    bzero(&(serv_addr.sin_zero), 8);
+
+	if(receiveAnswer) {
+        DEBUG_PRINT2("BULLY - AGUARDANDO MENSAGEM PROCLAMANDO O NOVO COORDENADOR\n");
+        sendto(sockfd, bufferWaitCoordinator, PACKAGE_SIZE, 0, (struct sockaddr *) &serv_addr, sizeof(struct sockaddr_in));
+	} else {
+        DEBUG_PRINT2("BULLY - SOU O NOVO COORDENADOR\n");
+        sendto(sockfd, bufferSendCoordinator, PACKAGE_SIZE, 0, (struct sockaddr *) &serv_addr, sizeof(struct sockaddr_in));
+	}
+
+	close(sockfd);
+	pthread_exit(NULL);
+}
+
+void *bullyThread(void *arg) {
+    Server* server = (Server*) arg;
+    int sockfd;
+    pthread_t th1, th2;
+    int electionStatus = WITHOUT_ELECTION;
+    int *newCoordinator = (int*) malloc(sizeof(int));
+	socklen_t rmlen;
+	struct sockaddr_in serv_addr, rm_addr;
+	char data[256];
+	bzero(data, 256);
+	Package *bufferReceive = malloc(PACKAGE_SIZE);
+	Package *ack = newPackage(ACK, "bully", 0, 0, data);
+	Package *asnwer = newPackage(ANSWER, "bully", 0, 0, data);
+
+	sleep(TIMEOUT_ELECTION); //pra evitar pacotes antigos remanescentes
+
+    if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) == -1)
+		printf("ERROR opening socket");
+
+	serv_addr.sin_family = AF_INET;
+	serv_addr.sin_port = htons(server->bullyPort);
+	serv_addr.sin_addr.s_addr = INADDR_ANY;
+	bzero(&(serv_addr.sin_zero), 8);
+
+	if (bind(sockfd, (struct sockaddr *) &serv_addr, sizeof(struct sockaddr)) < 0)
+		printf("ERROR on binding");
+
+	rmlen = sizeof(struct sockaddr_in);
+
+	DEBUG_PRINT2("BULLY - A THREAD ESTÁ RODANDO NA PORTA %d\n", server->bullyPort);
+
+	if (server->id == coordinatorId) {
+        while(TRUE) {
+            recvfrom(sockfd, bufferReceive, PACKAGE_SIZE, 0, (struct sockaddr *) &rm_addr, &rmlen);
+            if (bufferReceive->type == TESTER) {
+                sendto(sockfd, ack, PACKAGE_SIZE, 0,(struct sockaddr *) &rm_addr, sizeof(struct sockaddr));
+            }
+        }
+	} else {
+	    setTimeoutElection(sockfd);
+        while (TRUE) {
+            if(recvfrom(sockfd, bufferReceive, PACKAGE_SIZE, 0, (struct sockaddr *) &rm_addr, &rmlen) < 0) {
+                if (electionStatus == WAITING_NEW_COORDINATOR) {
+                    DEBUG_PRINT2("BULLY - TIMEOUT NA ESPERA DO COORDENADOR\n"); //VERIFICAR DEPOIS
+                } else if (electionStatus == WITHOUT_ELECTION) {
+                    pthread_create(&th1, NULL, testCoordinator, (void*) server);
+                }
+            } else {
+                DEBUG_PRINT2("BULLY - NOVO PACOTE\n");
+                if(bufferReceive->type == ELECTION) {
+                    if (electionStatus == WITHOUT_ELECTION) {
+                        sendto(sockfd, asnwer, PACKAGE_SIZE, 0,(struct sockaddr *) &rm_addr, sizeof(struct sockaddr));
+                        DEBUG_PRINT2("BULLY - ENVIADO ASNWER E INICIADO PRÓPRIA ELEIÇÃO\n");
+                        electionStatus = IN_ELECTION;
+                        pthread_create(&th2, NULL, startElection, (void*) server);
+                    } else {
+                        DEBUG_PRINT2("BULLY - RECEBEU UM ELECTION ATRASADO\n");
+                        sendto(sockfd, asnwer, PACKAGE_SIZE, 0,(struct sockaddr *) &rm_addr, sizeof(struct sockaddr)); //manda ack pra não ficar se elegendo
+                    }
+                }
+                if (bufferReceive->type == COORDINATOR) {
+                    *newCoordinator = atoi(bufferReceive->data);
+                    DEBUG_PRINT2("BULLY - NOVO COORDENADOR ELEITO É %d\n", *newCoordinator);
+                    close(sockfd);
+                    pthread_exit(newCoordinator);
+                }
+                if (bufferReceive->type == SEND_COORDINATOR) {
+                    DEBUG_PRINT2("BULLY - AVISANDO OUTROS SERVIDORES QUE ME TORNEI COORDENADOR\n");
+                    sendCoordinatorMessage(server);
+                    *newCoordinator = server->id;
+                    close(sockfd);
+                    pthread_exit(newCoordinator);
+                }
+                if (bufferReceive->type == WAITING_NEW_COORDINATOR) {
+                    electionStatus = WAITING_NEW_COORDINATOR;
+                }
+                if (bufferReceive->type == TEST_FAIL) {
+                    DEBUG_PRINT2("BULLY - COORDENADOR CAIU, INICIANDO ELEIÇÃO\n");
+                    electionStatus = IN_ELECTION;
+                    pthread_create(&th2, NULL, startElection, (void*) server);
+                }
+                if (bufferReceive->type == TEST_OK) {
+                    DEBUG_PRINT2("BULLY - COORDENADOR OK\n");
+                }
+            }
+        }
 	}
 }

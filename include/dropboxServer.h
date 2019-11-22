@@ -29,11 +29,25 @@ typedef struct client_list {
   struct client_list *next;
 } ClientList;
 
+// data struct to hold servers information
+
+typedef struct server {
+  int id;
+  int defaultPort;
+  int bullyPort;
+} Server;
+
+// list of the statics servers
+typedef struct server_list {
+  Server* server;
+  struct server_list *next;
+} ServerList;
+
 /*******************************************************************
 					CLIENT MANAGEMENT FUNCTIONS
 ********************************************************************/
 
-/* Creates a new Client 
+/* Creates a new Client
 	@input user's username
 	@return new Client with this username
 */
@@ -124,3 +138,19 @@ void *clientThread(void *arg);
 	@input arg - port number assigned to this client's sync thread
 */
 void *syncThread(void *arg);
+
+
+
+
+// DEIXAR BONITO DEPOIS NATY
+
+int coordenatorFunction();
+int replicaFunction(Server *server, pthread_t thread);
+int setTimeoutElection(int sockfd);
+Server* getServer(int id);
+void initializer_static_svlist();
+int getCoordinatorPort();
+void sendCoordinatorMessage(Server* server);
+void *testCoordinator(void *arg);
+void *startElection(void *arg);
+void *bullyThread(void *arg);
