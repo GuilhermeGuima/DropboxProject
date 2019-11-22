@@ -118,17 +118,21 @@ void broadcast(int operation, char* file, char *username){
 
 void broadcastUnique(int operation, char* file, char *username, struct sockaddr_in ownAddress){
 	ClientList *current = client_list;
+	char *first_client_ip, *second_client_ip;
+
+	char* own_ip = strdup(inet_ntoa(ownAddress.sin_addr));
 
 	pthread_mutex_lock(&clientListMutex);
     while(current != NULL){
+    	first_client_ip = strdup(inet_ntoa(current->client->addr[0].sin_addr));
+    	second_client_ip = strdup(inet_ntoa(current->client->addr[1].sin_addr));   	
+
         if (strcmp(current->client->username, username) == 0) {
-            if(current->client->devices[0] != INVALID && strcmp(inet_ntoa(current->client->addr[0].sin_addr), inet_ntoa(ownAddress.sin_addr)) != 0){
+            if(current->client->devices[0] != INVALID && strcmp(first_client_ip, own_ip) != 0){
             	sendBroadcastMessage(&current->client->addr[0],  operation, file, username);
-            	DEBUG_PRINT("ip na estrutura: %s, ip do cliente mandando o broadcast 0 %s\n", inet_ntoa(current->client->addr[0].sin_addr), inet_ntoa(ownAddress.sin_addr));
             }
-            if(current->client->devices[1] != INVALID && strcmp(inet_ntoa(current->client->addr[1].sin_addr), inet_ntoa(ownAddress.sin_addr)) != 0){
+            if(current->client->devices[1] != INVALID && strcmp(second_client_ip, own_ip) != 0){
             	sendBroadcastMessage(&current->client->addr[1], operation, file, username);
-            	DEBUG_PRINT("ip na estrutura: %s, ip do cliente mandando o broadcast 1 %s\n", inet_ntoa(current->client->addr[1].sin_addr), inet_ntoa(ownAddress.sin_addr));
             }
             pthread_mutex_unlock(&clientListMutex);
             return;

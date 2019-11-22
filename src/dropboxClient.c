@@ -198,7 +198,6 @@ int uploadFile(char *file_path, int *seqNumber, Connection *connection) {
 	struct stat buf;
 	if (stat(file_path, &buf) == 0){
 		sendFile(file_path, connection, user);
-		DEBUG_PRINT("Enviou arquivo sync up\n");
 	}else{
 		DEBUG_PRINT("ARQUIVO %s NAO EXISTE\n", file_path);
 		sendFile(file_path, connection, user);
@@ -333,10 +332,10 @@ void *sync_thread(){
 			while(i < length){
 				struct inotify_event *event = (struct inotify_event *) &buffer[i];
 				if(event->len){
-					if(event->mask & IN_CREATE || event->mask & IN_CLOSE_WRITE || event->mask & IN_MOVED_TO){
+					if(event->mask & IN_CREATE || event->mask & IN_MODIFY || event->mask & IN_MOVED_TO){
 						if(! (event->mask & IN_ISDIR)){
 							filename = makePath(folder,event->name);
-							DEBUG_PRINT("upload inotify\n");
+							DEBUG_PRINT("upload inotify %s\n", filename);
 							uploadFile(filename, &seqnumSyn, connectionSync);
 						}
 					}
@@ -356,7 +355,6 @@ void *sync_thread(){
 		}
 
 		i = 0;
-		sleep(5);
 	}
 }
 
