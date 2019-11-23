@@ -63,3 +63,18 @@
 #define LIST_START_SEQ 2 //sequence number shift for file list transmission
 #define MAX_LIST_SIZE 4000
 #define CLIENTS_PORT 30000
+
+//Election
+
+#define WITHOUT_ELECTION 0
+#define WAITING_NEW_COORDINATOR 1
+#define SEND_COORDINATOR 2
+#define ELECTION 3
+#define ANSWER 4
+#define COORDINATOR 5
+#define TESTER 6
+#define TEST_FAIL 7
+#define TEST_OK 8
+#define IN_ELECTION 9
+#define TIMEOUT_ELECTION 20
+#define MAX_ATTEMPTS_RECEIVE 3

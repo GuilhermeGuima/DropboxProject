@@ -1,7 +1,9 @@
 #ifndef UTIL_H
 #define UTIL_H
 
-#define DEBUG // Comentar esta linha para desativar DEBUG mode.
+//#define DEBUG // Comentar esta linha para desativar DEBUG mode da primeira parte do trabalho.
+
+#define DEBUG2 // Comentar esta linha para desativar DEBUG mode da segunda parte do trabalho.
 
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -28,6 +30,14 @@
 #ifdef DEBUG
   #define DEBUG_PRINT(fmt, args...) fprintf(stderr, "DEBUG:\t"fmt, ## args)
   #define DEBUG_PRINT_COND(cond, fmt, args...) if(cond) fprintf(stderr, "DEBUG:\t"fmt, ## args)
+#else
+  #define DEBUG_PRINT(fmt, args...) /* Don't do anything in release builds */
+  #define DEBUG_PRINT_COND(fmt, args...)
+#endif
+
+#ifdef DEBUG2
+  #define DEBUG_PRINT2(fmt, args...) fprintf(stderr, "DEBUG:\t"fmt, ## args)
+  #define DEBUG_PRINT_COND2(cond, fmt, args...) if(cond) fprintf(stderr, "DEBUG:\t"fmt, ## args)
 #else
   #define DEBUG_PRINT(fmt, args...) /* Don't do anything in release builds */
   #define DEBUG_PRINT_COND(fmt, args...)
@@ -115,7 +125,7 @@ int getFileSize(char *path);
 */
 char* makePath(char* left, char* right);
 
-/*  Lists all files in a directory, with their access time, 
+/*  Lists all files in a directory, with their access time,
     modification time and creation time
   @input dir_path - directory path
   @return a string containing the list of all files and their times
