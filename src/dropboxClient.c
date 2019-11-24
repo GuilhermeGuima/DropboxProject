@@ -12,9 +12,7 @@ pthread_mutex_t broadcastMutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_t bcast_t, sync_t, client_t;
 
 int main(int argc, char *argv[]) {
-	int port;
-	Connection *firstConn = malloc(sizeof(Connection));
-
+	
 	DEBUG_PRINT("OPÇÃO DE DEBUG ATIVADA\n");
 
 	if (argc < 3) {
@@ -42,13 +40,6 @@ int main(int argc, char *argv[]) {
 
 	DEBUG_PRINT("User: %s\n", user);
 	DEBUG_PRINT("Folder: %s\n", folder);
-
-
-	firstConn = getConnection(PORT);
-	connection = firstConn;
-
-	port = firstConnection(user, firstConn);
-    connection = getConnection(port);
 	
     int *new_client;
     *new_client = 1;
@@ -498,15 +489,22 @@ void *election_thread(){
 
 		switch(request->type){
 			case ANNOUNCE_ELECTION:
-				/** TODO: **/
-				/** Receives package of new server **/
-			
+				/** Receive package of new server **/
+				server = gethostbyname(inet_ntoa(connectionBroad->address->sin_addr));
+
 				/** Cancel all other running threads for client **/
 				pthread_cancel(bcast_t);
 				pthread_cancel(sync_t);
 				pthread_cancel(client_t);
 
 				/** Restart all threads **/
+				int *new_client;
+			    *new_client = 1;
+
+			    if(pthread_create(&client_t, NULL, main_thread, &new_client)){
+			    	fprintf(stderr,"Failure creating main client thread.\n"); return FAILURE;
+			    }
+
 				break;
 		}
     }
