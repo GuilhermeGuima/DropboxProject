@@ -53,7 +53,9 @@ int main(int argc, char *argv[]) {
     int *new_client;
     *new_client = 1;
 
-    if(pthread_create(&client_t, NULL, main_thread, &new_client))
+    if(pthread_create(&client_t, NULL, main_thread, &new_client)){
+    	fprintf(stderr,"Failure creating main client thread.\n"); return FAILURE;
+    }
 
 	while(TRUE){};	// main thread shouldn't finish
 
