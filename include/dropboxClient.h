@@ -134,3 +134,14 @@ void *sync_thread();
 	files that have to be propagated to the other devices.
 */
 void *broadcast_thread();
+
+/*
+	Thread to listen for coordinator election results
+*/
+void *election_thread();
+
+/*
+	Thread for command line requests (also the thread that initializes all
+	others, ergo the main thread)
+*/
+void *main_thread(void *arg);

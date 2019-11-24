@@ -9,6 +9,7 @@ int seqnum = 0, seqnumReceive = 0;
 
 int broadcasted;
 pthread_mutex_t broadcastMutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_t bcast_t, sync_t, client_t;
 
 int main(int argc, char *argv[]) {
 	int port;
@@ -47,25 +48,14 @@ int main(int argc, char *argv[]) {
 	connection = firstConn;
 
 	port = firstConnection(user, firstConn);
-    	connection = getConnection(port);
-	if (port > 0) {
+    connection = getConnection(port);
+	
+    int *new_client;
+    *new_client = 1;
 
-		pthread_t bcast;
-		pthread_t sync_t;
+    if(pthread_create(&client_t, NULL, main_thread, &new_client))
 
-		getSyncDir(folder);
-
-		// create thread to listen for events and sync
-		if(pthread_create(&sync_t, NULL, sync_thread, NULL)){
-			fprintf(stderr,"Failure creating sync thread.\n"); return FAILURE;
-		}
-
-		if(pthread_create(&bcast, NULL, broadcast_thread, NULL)){
-			fprintf(stderr,"Failure creating broadcast thread.\n"); return FAILURE;
-		}
-
-		selectCommand();
-	}
+	while(TRUE){};	// main thread shouldn't finish
 
 	close(connection->socket);
 
@@ -75,17 +65,20 @@ int main(int argc, char *argv[]) {
 	return SUCCESS;
 }
 
-void selectCommand() {
+void selectCommand(int new) {
 	char command[12 + MAX_PATH];
 	char path[MAX_PATH];
 	char *valid;
-	seqnum = 0; // resets because new socket has been created on server-side
+	int server_down = new;	// to make it transparent to the end-user that a server was down
 
+	seqnum = 0; // resets because new socket has been created on server-side
+	
 	sleep(1);
-	printf("\n\nComandos disponíveis:\n\nupload <file>\ndownload <file>\ndelete <file>\nlist_server\nlist_client\nexit\n\n");
+	if(!server_down) printf("\n\nComandos disponíveis:\n\nupload <file>\ndownload <file>\ndelete <file>\nlist_server\nlist_client\nexit\n\n");
 
 	do {
-		printf("\nDigite seu comando: ");
+		if(!server_down) printf("\nDigite seu comando: ");
+		server_down = 0;
 
 		valid = fgets(command, sizeof(command)-1, stdin);
 		if(valid != NULL) {
@@ -468,4 +461,76 @@ Connection* getConnection(int port){
     connection->address = serv_addr;
 
     return connection;
+}
+
+// FRONT-END CODE (T2)
+void *election_thread(){
+	int seqnum = 0, seqnumReceive = 0, sockfd, file_size;
+	char *buffer, bufFirst[DATA_SEGMENT_SIZE], *file_path;
+    struct sockaddr_in cli_addr;
+
+    Connection *connectionBroad = malloc(sizeof(Connection));
+
+    // creation of the election listening client socket
+    if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) == -1)
+		fprintf(stderr, "ERROR opening socket");
+
+	cli_addr.sin_family = AF_INET;
+	cli_addr.sin_port = htons(CLIENTS_PORT);
+	cli_addr.sin_addr.s_addr = INADDR_ANY;
+	bzero(&(cli_addr.sin_zero), 8);
+
+	if (bind(sockfd, (struct sockaddr *) &cli_addr, sizeof(struct sockaddr)) < 0)
+		fprintf(stderr, "ERROR on binding");
+
+	connectionBroad->socket = sockfd;
+	connectionBroad->address = &cli_addr;
+
+	seqnumReceive = 0; seqnum = 0;
+	Package *request = malloc(sizeof(Package));
+
+    while(TRUE){
+    	seqnumReceive = 0;
+
+		receivePackage(connectionBroad, request, seqnumReceive);
+		seqnumReceive = 1 - seqnumReceive;
+
+		switch(request->type){
+			case ANNOUNCE_ELECTION:
+				/** TODO: **/
+				/** Receives package of new server **/
+				/** Cancel all other running threads for client **/
+				/** Restart all threads **/
+				break;
+		}
+    }
+}
+
+void *main_thread(void *arg){
+
+	int *new_client = (int *) arg;
+	int port;
+
+	Connection* firstConn = getConnection(PORT);
+
+	port = firstConnection(user, firstConn);
+    connection = getConnection(port);
+	
+	if (port > 0) {
+		getSyncDir(folder);
+
+		// create thread to listen for events and sync
+		if(pthread_create(&sync_t, NULL, sync_thread, NULL)){
+			fprintf(stderr,"Failure creating sync thread.\n"); return FAILURE;
+		}
+
+		if(pthread_create(&bcast_t, NULL, broadcast_thread, NULL)){
+			fprintf(stderr,"Failure creating broadcast thread.\n"); return FAILURE;
+		}
+
+		selectCommand(*new_client);
+	}
+
+
+	return NULL;
 }
