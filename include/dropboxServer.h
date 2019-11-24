@@ -35,6 +35,7 @@ typedef struct server {
   int id;
   int defaultPort;
   int bullyPort;
+  char ip[16];
 } Server;
 
 // list of the statics servers
@@ -144,8 +145,8 @@ void *syncThread(void *arg);
 
 // DEIXAR BONITO DEPOIS NATY
 
-int coordenatorFunction();
-int replicaFunction(Server *server, pthread_t thread);
+void *coordinatorFunction();
+void *replicaFunction(void* arg);
 int setTimeoutElection(int sockfd);
 Server* getServer(int id);
 void initializer_static_svlist();

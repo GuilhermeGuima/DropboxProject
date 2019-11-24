@@ -3,13 +3,16 @@
 
 ClientList *client_list;
 sem_t portBarrier;
+pthread_t main_thread, bully_thread;
 pthread_mutex_t clientListMutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t serverListMutex = PTHREAD_MUTEX_INITIALIZER;
 ServerList *svList;
 int coordinatorId;
 
+char primary_server_ip[16] = "127.0.0.1";
+
 int main(int argc, char *argv[]) {
 	ServerList *auxList;
-	pthread_t th1;
     int id;
     Server *server;
     coordinatorId = 1;
@@ -39,19 +42,19 @@ int main(int argc, char *argv[]) {
 	}
 
 	while (TRUE) {
-        pthread_create(&th1, NULL, bullyThread, (void*) server);
+        pthread_create(&bully_thread, NULL, bullyThread, (void*) server);
 
         if (server->id == coordinatorId) {
-            coordenatorFunction();
+            pthread_create(&main_thread, NULL, coordinatorFunction, NULL);
         } else {
-            replicaFunction(server, th1);
+            pthread_create(&main_thread, NULL, replicaFunction, (void*) server);
         }
 	}
 
 	return 0;
 }
 
-int coordenatorFunction() {         //MAIN DA PT1 DO TRABALHO
+void* coordinatorFunction() {         //MAIN DA PT1 DO TRABALHO
 	int sockfd;
 	struct sockaddr_in serv_addr;
 	int *port_count = malloc(sizeof(int));
@@ -123,6 +126,7 @@ int coordenatorFunction() {         //MAIN DA PT1 DO TRABALHO
 		} else{
 			if (approveClient(client, &client_list)) {
 				if(buffer->type == BROADCAST){
+					// TODO: send_new_client_to_replicas()
 					addClient(client, &client_list);
 					*port_count = *port_count - 1;	//no new port is assigned for a broadcast
 				}
@@ -139,10 +143,10 @@ int coordenatorFunction() {         //MAIN DA PT1 DO TRABALHO
 	}
 
 	close(sockfd);
-	return SUCCESS;
+	return NULL;
 }
 
-int replicaFunction(Server *server, pthread_t thread) {
+void* replicaFunction(void* arg) {
     int sockfd, n, status;
     int *res;
     int changedCoordinator = FALSE;
@@ -182,7 +186,7 @@ int replicaFunction(Server *server, pthread_t thread) {
 
 
         if(recvfrom(sockfd, buffer, 256, 0, (struct sockaddr *) &from, &length) < 0 ) {
-             status = pthread_join(thread, (void **) &res);
+             status = pthread_join(bully_thread, (void **) &res);
              if (status != 0)
                 exit(1);
              coordinatorId = *res;
@@ -191,13 +195,14 @@ int replicaFunction(Server *server, pthread_t thread) {
         } else {
             printf("SYSTEM: %s\n", buffer);
             if(strcmp(buffer, "ACK") == 0) {
-                sleep(3);
+                sleep(2);
             }
         }
 	}
+
 	printf("SYSTEM: SAINDO DA FUNÇÃO PARA SERVIDOR REPLICADO\n");
 	close(sockfd);
-	return SUCCESS;
+	return NULL;
 }
 
 void broadcast(int operation, char* file, char *username){
@@ -320,6 +325,9 @@ void *clientThread(void *arg) {
 				file_path = makePath(request->user,request->data);
 				file_path = makePath(server_folder, file_path);
 				saveFile(buffer, file_size, file_path);
+
+				//TODO: send_to_upload_to_replicas();
+
 				broadcast(UPLOAD,request->data, request->user);
 				break;
 			case DOWNLOAD:
@@ -333,7 +341,7 @@ void *clientThread(void *arg) {
 				file_path = makePath(request->user,request->data);
 				file_path = makePath(server_folder, file_path);
 				if(remove(file_path) == 0){
-					DEBUG_PRINT("Sucessfully deleted file\n");
+					//TODO: send_to_delete_to_replicas();
 					broadcast(DELETE,request->data, request->user);
 				}
 				break;
@@ -393,6 +401,9 @@ void *syncThread(void *arg) {
 					file_path = makePath(request->user,request->data);
 					file_path = makePath(server_folder, file_path);
 					saveFile(buffer, file_size, file_path);
+
+					//TODO: send_upload_to_replicas()
+
 					broadcastUnique(UPLOAD, request->data, request->user, *connection->address);
 				}
 				break;
@@ -400,6 +411,7 @@ void *syncThread(void *arg) {
 				file_path = makePath(request->user,request->data);
 				file_path = makePath(server_folder, file_path);
 				if(remove(file_path) == 0){
+					//TODO: send_delete_to_replicas()
 					broadcastUnique(DELETE,request->data, request->user, *connection->address);
 				}
 				break;
@@ -650,32 +662,20 @@ int setTimeoutElection(int sockfd){
 }
 
 Server* getServer(int id) {
-    Server *server = malloc(sizeof(Server));
-    if (id == 1) {
-        server->id = 1;
-        server->defaultPort = 5001;
-        server->bullyPort = 6001;
-    }
-    if (id == 2) {
-        server->id = 2;
-        server->defaultPort = 5002;
-        server->bullyPort = 6002;
-    }
-    if (id == 3) {
-        server->id = 3;
-        server->defaultPort = 5003;
-        server->bullyPort = 6003;
-    }
-    if (id == 4) {
-        server->id = 4;
-        server->defaultPort = 5004;
-        server->bullyPort = 6004;
-    }
     if (id < 1 || id > 4) {
         return NULL;
     }
+    ServerList *current = svList;
+    Server* res_server = NULL;
 
-    return server;
+    pthread_mutex_lock(&serverListMutex);
+    while(current != NULL){
+    	if(current->server->id == id) res_server = current->server;
+    	current = current->next;
+    }
+    pthread_mutex_unlock(&serverListMutex);
+
+    return res_server;
 }
 
 void initializer_static_svlist() {
@@ -687,15 +687,19 @@ void initializer_static_svlist() {
     sv1->id = 1;
     sv1->defaultPort = 5001;
     sv1->bullyPort = 6001;
+    strcpy(sv1->ip,"127.0.0.1");
     sv2->id = 2;
     sv2->defaultPort = 5002;
     sv2->bullyPort = 6002;
+    strcpy(sv2->ip,"127.0.0.1");
     sv3->id = 3;
     sv3->defaultPort = 5003;
     sv3->bullyPort = 6003;
+    strcpy(sv3->ip,"127.0.0.1");
     sv4->id = 4;
     sv4->defaultPort = 5004;
     sv4->bullyPort = 6004;
+    strcpy(sv4->ip,"127.0.0.1");
 
     auxList = malloc(sizeof(ServerList));
     auxList->server = sv4;
