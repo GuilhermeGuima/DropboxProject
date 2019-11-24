@@ -467,8 +467,7 @@ Connection* getConnection(int port){
 
 // FRONT-END CODE (T2)
 void *election_thread(){
-	int seqnum = 0, seqnumReceive = 0, sockfd, file_size;
-	char *buffer, bufFirst[DATA_SEGMENT_SIZE], *file_path;
+	int seqnumReceive = 0, sockfd;
     struct sockaddr_in cli_addr;
 
     Connection *connectionBroad = malloc(sizeof(Connection));
@@ -501,7 +500,12 @@ void *election_thread(){
 			case ANNOUNCE_ELECTION:
 				/** TODO: **/
 				/** Receives package of new server **/
+			
 				/** Cancel all other running threads for client **/
+				pthread_cancel(bcast_t);
+				pthread_cancel(sync_t);
+				pthread_cancel(client_t);
+
 				/** Restart all threads **/
 				break;
 		}
