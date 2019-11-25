@@ -689,6 +689,7 @@ void initializer_static_svlist() {
     Server *sv2 = malloc(sizeof(Server));
     Server *sv3 = malloc(sizeof(Server));
     Server *sv4 = malloc(sizeof(Server));
+    // TODO: dont let the ips hardcoded
     sv1->id = 1;
     sv1->defaultPort = 5001;
     sv1->bullyPort = 6001;
@@ -974,6 +975,46 @@ void *bullyThread(void *arg) {
 	}
 }
 
+int send_upload_to_replicas(char* user, char* file_path, char* data, int file_size){
+	char* filename = basename(file_path);
+	int seqNumber = 0, sockfd;
+	struct sockaddr_in repl_addr;
+	ServerList *current;
+	struct hostent *bk_server;
+
+	Connection *connectionUp = malloc(sizeof(Connection));
+
+	/* TODO: This is currently sequential, could be improved by creating n parallel threads
+	   each thread uploading the file to one of the backups */
+	pthread_mutex_lock(&serverListMutex);
+	current = svList;
+	while(current != NULL){
+		if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) == -1)
+			fprintf(stderr, "ERROR opening socket");
+
+		bk_server = gethostbyname(current->server->ip);
+		repl_addr.sin_family = AF_INET;
+		repl_addr.sin_port = htons(REPLICA_PORT);
+		repl_addr.sin_addr = *((struct in_addr *)bk_server->h_addr);
+		bzero(&(repl_addr.sin_zero), 8);
+
+		if (bind(sockfd, (struct sockaddr *) &repl_addr, sizeof(struct sockaddr)) < 0)
+			fprintf(stderr, "ERROR on binding");
+
+		connectionUp->socket = sockfd;
+		connectionUp->address = &repl_addr;
+
+		Package *commandPackage = newPackage(UPLOAD,user,seqNumber,0,filename);
+		sendPackage(commandPackage, connectionUp, NOT_LIMITED);
+		seqNumber = 1 - seqNumber;
+
+		sendFile(file_path, connectionUp, user);
+	}
+	pthread_mutex_unlock(&serverListMutex);
+
+	return SUCCESS;
+}
+
 // thread to listen for requests coming from the coordinator
 // to duplicate all upload and delete operations in the backup servers
 void* replicaManagerThread(){
@@ -999,6 +1040,7 @@ void* replicaManagerThread(){
 	connectionRM->address = &repl_addr;
 
 	while (TRUE) {
+		seqnumReceive = 0;
 		Package *request = malloc(sizeof(Package));
 		receivePackage(connectionRM, request, seqnumReceive);
 		seqnumReceive = 1 - seqnumReceive;
