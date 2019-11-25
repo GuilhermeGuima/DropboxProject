@@ -980,6 +980,7 @@ void* replicaManagerThread(){
 	int sockfd, file_size;
 	char *buffer = NULL, *file_path = NULL;
 	struct sockaddr_in repl_addr;
+	Client* client;
 	Connection *connectionRM = malloc(sizeof(Connection));
 	int seqnumReceive = 0;
 
@@ -1017,7 +1018,10 @@ void* replicaManagerThread(){
 				remove(file_path);
 				break;
 			case NEW_CLIENT:
-				//TODO: create protocol for new client
+				client = malloc(sizeof(Client));
+				strcpy(client->username, request->user);
+				memcpy(&client->addr, request->data, sizeof(struct sockaddr_in));
+				addClient(client, &client_list);
 				break;
 			default: fprintf(stderr, "Invalid command number %d for RM thread\n", request->type);
 		}
