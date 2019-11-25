@@ -59,7 +59,7 @@ void* coordinatorFunction() {         //MAIN DA PT1 DO TRABALHO
 	int sockfd;
 	struct sockaddr_in serv_addr;
 	int *port_count = malloc(sizeof(int));
-	Package *buffer = malloc(sizeof(Package));
+	Packet *buffer = malloc(sizeof(Packet));
 	char portMapper[DATA_SEGMENT_SIZE];
 	pthread_t th1, th2;
 	Client *client;
@@ -104,7 +104,7 @@ void* coordinatorFunction() {         //MAIN DA PT1 DO TRABALHO
 		printf("Aguardando conexões de clientes\n");
 		seqnumReceive = 0; seqnumSend = 0;
 
-		receivePackage(&connection, buffer, seqnumReceive);
+		receivePacket(&connection, buffer, seqnumReceive);
 		seqnumReceive = 1 - seqnumReceive;
 
 		*port_count = *port_count + 1;
@@ -138,8 +138,8 @@ void* coordinatorFunction() {         //MAIN DA PT1 DO TRABALHO
 			}
 		}
 
-		Package *p = newPackage(CMD,client->username,seqnumSend,0,portMapper);
-		sendPackage(p,&connection, NOT_LIMITED);
+		Packet *p = newPacket(CMD,client->username,seqnumSend,0,portMapper);
+		sendPacket(p,&connection, NOT_LIMITED);
 		seqnumSend = 1 - seqnumSend;
 	}
 
@@ -272,8 +272,8 @@ void sendBroadcastMessage(struct sockaddr_in *addr, int operation, char *file, c
     connection.address = client_addr;
 
     // sends file name and operation
-	Package *p = newPackage(operation,username,0,0,file);
-	sendPackage(p,&connection, NOT_LIMITED);
+	Packet *p = newPacket(operation,username,0,0,file);
+	sendPacket(p,&connection, NOT_LIMITED);
 
 	if(operation == UPLOAD){
 		// sends file
@@ -318,8 +318,8 @@ void *clientThread(void *arg) {
 		DEBUG_PRINT("ENTROU NO WHILE DA CLIENT THREAD\n");
 		DEBUG_PRINT("PORTA DO CLIENTE %d\n", port);
 
-		Package *request = malloc(sizeof(Package));
-		receivePackage(connection, request, seqnum);
+		Packet *request = malloc(sizeof(Packet));
+		receivePacket(connection, request, seqnum);
 		seqnum = 1 - seqnum;
 
 		switch(request->type){
@@ -393,8 +393,8 @@ void *syncThread(void *arg) {
 		DEBUG_PRINT("ENTROU NO WHILE DA SYNC THREAD\n");
 		DEBUG_PRINT("PORTA DO CLIENTE %d\n", port);
 
-		Package *request = malloc(sizeof(Package));
-		receivePackage(connection, request, seqnum);
+		Packet *request = malloc(sizeof(Packet));
+		receivePacket(connection, request, seqnum);
 		seqnum = 1 - seqnum;
 
 		switch(request->type){
@@ -419,9 +419,9 @@ void *syncThread(void *arg) {
 			case DOWNLOAD_ALL:
 				nbFiles = countFiles(request->user);
 				itoa(nbFiles, nbFilesBuffer);
-				Package *p = newPackage(CMD, request->user, seqnumSend, 0, nbFilesBuffer);
+				Packet *p = newPacket(CMD, request->user, seqnumSend, 0, nbFilesBuffer);
 				seqnumSend = 1 - seqnumSend;
-				sendPackage(p, connection, NOT_LIMITED);
+				sendPacket(p, connection, NOT_LIMITED);
 				sendAllFiles(request->user, connection, seqnumSend);
 
 				break;
@@ -437,7 +437,7 @@ void sendAllFiles(char *username, Connection *connection, int seqnum){
 
  	char file_path[MAX_PATH];
     char* dir_path = makePath(server_folder, username);
-    Package *p;
+    Packet *p;
 
     if((parent_dir = opendir(dir_path)) == NULL){
         fprintf(stderr, "Error opening directory %s\n", dir_path);
@@ -454,8 +454,8 @@ void sendAllFiles(char *username, Connection *connection, int seqnum){
                 continue;
             }else{
             	// sends file name
-            	p = newPackage(CMD, username, seqnum, 0, dp->d_name);
-                sendPackage(p, connection, NOT_LIMITED);
+            	p = newPacket(CMD, username, seqnum, 0, dp->d_name);
+                sendPacket(p, connection, NOT_LIMITED);
                 seqnum = 1 - seqnum;
 
                 // sends file
@@ -489,13 +489,13 @@ void sendList(char* dir_path, char* username, Connection *connection){
 	char *s = listDirectoryContents(dir_path);
 	char buf[DATA_SEGMENT_SIZE];
 	int i;
-	Package *p;
+	Packet *p;
 
 	for(i = 0; i < MAX_LIST_SIZE/DATA_SEGMENT_SIZE; i++){
 		memcpy(buf,s+i*(DATA_SEGMENT_SIZE-1),DATA_SEGMENT_SIZE-1);
 		buf[DATA_SEGMENT_SIZE-1] = '\0';
-		p = newPackage(DATA, username,LIST_START_SEQ+i,0,buf);
-		sendPackage(p, connection, NOT_LIMITED);
+		p = newPacket(DATA, username,LIST_START_SEQ+i,0,buf);
+		sendPacket(p, connection, NOT_LIMITED);
 	}
 }
 
@@ -743,7 +743,7 @@ void sendCoordinatorMessage(Server* server) {
 	ServerList *auxList;
 
 	itoa(server->id, data);
-	Package *bufferSend = newPackage(COORDINATOR, "bully", 0, 0, data);
+	Packet *bufferSend = newPacket(COORDINATOR, "bully", 0, 0, data);
 
 	sv = gethostbyname("localhost");
 	if (sv == NULL) {
@@ -760,7 +760,7 @@ void sendCoordinatorMessage(Server* server) {
             serv_addr.sin_port = htons(auxList->server->bullyPort);
             serv_addr.sin_addr = *((struct in_addr *)sv->h_addr);
             bzero(&(serv_addr.sin_zero), 8);
-            sendto(sockfd, bufferSend, PACKAGE_SIZE, 0, (struct sockaddr *) &serv_addr, sizeof(struct sockaddr_in));
+            sendto(sockfd, bufferSend, PACKET_SIZE, 0, (struct sockaddr *) &serv_addr, sizeof(struct sockaddr_in));
             close(sockfd);
         }
         auxList = auxList->next;
@@ -776,10 +776,10 @@ void *testCoordinator(void *arg) {
 	struct hostent *sv;
 	char data[256];
 	bzero(data, 256);
-	Package *bufferReceive = malloc(PACKAGE_SIZE);
-	Package *tester = newPackage(TESTER, "bully", 0, 0, data);
-	Package *test_fail = newPackage(TEST_FAIL, "bully", 0, 0, data);
-	Package *test_ok = newPackage(TEST_OK, "bully", 0, 0, data);
+	Packet *bufferReceive = malloc(PACKET_SIZE);
+	Packet *tester = newPacket(TESTER, "bully", 0, 0, data);
+	Packet *test_fail = newPacket(TEST_FAIL, "bully", 0, 0, data);
+	Packet *test_ok = newPacket(TEST_OK, "bully", 0, 0, data);
 
 	sv = gethostbyname("localhost");
 
@@ -792,8 +792,8 @@ void *testCoordinator(void *arg) {
 	serv_addr.sin_addr = *((struct in_addr *)sv->h_addr);
 	bzero(&(serv_addr.sin_zero), 8);
 
-	sendto(sockfd, tester, PACKAGE_SIZE, 0, (const struct sockaddr *) &serv_addr, sizeof(struct sockaddr_in));
-	if (recvfrom(sockfd, bufferReceive, PACKAGE_SIZE, 0, (struct sockaddr *) &from, &length) >= 0) {
+	sendto(sockfd, tester, PACKET_SIZE, 0, (const struct sockaddr *) &serv_addr, sizeof(struct sockaddr_in));
+	if (recvfrom(sockfd, bufferReceive, PACKET_SIZE, 0, (struct sockaddr *) &from, &length) >= 0) {
         if (bufferReceive->type == ACK) {
             verifyCoordinator = TRUE;
         }
@@ -808,9 +808,9 @@ void *testCoordinator(void *arg) {
     bzero(&(serv_addr.sin_zero), 8);
 
 	if (verifyCoordinator) {
-        sendto(sockfd, test_ok, PACKAGE_SIZE, 0, (struct sockaddr *) &serv_addr, sizeof(struct sockaddr_in));
+        sendto(sockfd, test_ok, PACKET_SIZE, 0, (struct sockaddr *) &serv_addr, sizeof(struct sockaddr_in));
 	} else {
-        sendto(sockfd, test_fail, PACKAGE_SIZE, 0, (struct sockaddr *) &serv_addr, sizeof(struct sockaddr_in));
+        sendto(sockfd, test_fail, PACKET_SIZE, 0, (struct sockaddr *) &serv_addr, sizeof(struct sockaddr_in));
 	}
 
 	close(sockfd);
@@ -827,10 +827,10 @@ void *startElection(void *arg) {
 	bzero(data, 256);
 	ServerList *auxList;
 
-	Package *bufferSendCoordinator = newPackage(SEND_COORDINATOR, "bully", 0, 0, data);
-	Package *bufferWaitCoordinator = newPackage(WAITING_NEW_COORDINATOR, "bully", 0, 0, data);
-	Package *bufferElection = newPackage(ELECTION, "bully", 0, 0, data);
-	Package *bufferReceive = malloc(PACKAGE_SIZE);
+	Packet *bufferSendCoordinator = newPacket(SEND_COORDINATOR, "bully", 0, 0, data);
+	Packet *bufferWaitCoordinator = newPacket(WAITING_NEW_COORDINATOR, "bully", 0, 0, data);
+	Packet *bufferElection = newPacket(ELECTION, "bully", 0, 0, data);
+	Packet *bufferReceive = malloc(PACKET_SIZE);
 
 	sv = gethostbyname("localhost");
 	if (sv == NULL) {
@@ -851,8 +851,8 @@ void *startElection(void *arg) {
             serv_addr.sin_addr = *((struct in_addr *)sv->h_addr);
             bzero(&(serv_addr.sin_zero), 8);
 
-            sendto(sockfd, bufferElection, PACKAGE_SIZE, 0, (struct sockaddr *) &serv_addr, sizeof(struct sockaddr_in));
-            if (recvfrom(sockfd, bufferReceive, PACKAGE_SIZE, 0, (struct sockaddr *) &rm_addr, &rmlen) >= 0) {
+            sendto(sockfd, bufferElection, PACKET_SIZE, 0, (struct sockaddr *) &serv_addr, sizeof(struct sockaddr_in));
+            if (recvfrom(sockfd, bufferReceive, PACKET_SIZE, 0, (struct sockaddr *) &rm_addr, &rmlen) >= 0) {
                 if (bufferReceive->type == ANSWER) {
                     DEBUG_PRINT2("BULLY - RECEBEU ANSWER\n");
                     receiveAnswer = TRUE;
@@ -872,10 +872,10 @@ void *startElection(void *arg) {
 
 	if(receiveAnswer) {
         DEBUG_PRINT2("BULLY - AGUARDANDO MENSAGEM PROCLAMANDO O NOVO COORDENADOR\n");
-        sendto(sockfd, bufferWaitCoordinator, PACKAGE_SIZE, 0, (struct sockaddr *) &serv_addr, sizeof(struct sockaddr_in));
+        sendto(sockfd, bufferWaitCoordinator, PACKET_SIZE, 0, (struct sockaddr *) &serv_addr, sizeof(struct sockaddr_in));
 	} else {
         DEBUG_PRINT2("BULLY - SOU O NOVO COORDENADOR\n");
-        sendto(sockfd, bufferSendCoordinator, PACKAGE_SIZE, 0, (struct sockaddr *) &serv_addr, sizeof(struct sockaddr_in));
+        sendto(sockfd, bufferSendCoordinator, PACKET_SIZE, 0, (struct sockaddr *) &serv_addr, sizeof(struct sockaddr_in));
 	}
 
 	close(sockfd);
@@ -892,9 +892,9 @@ void *bullyThread(void *arg) {
 	struct sockaddr_in serv_addr, rm_addr;
 	char data[256];
 	bzero(data, 256);
-	Package *bufferReceive = malloc(PACKAGE_SIZE);
-	Package *ack = newPackage(ACK, "bully", 0, 0, data);
-	Package *asnwer = newPackage(ANSWER, "bully", 0, 0, data);
+	Packet *bufferReceive = malloc(PACKET_SIZE);
+	Packet *ack = newPacket(ACK, "bully", 0, 0, data);
+	Packet *asnwer = newPacket(ANSWER, "bully", 0, 0, data);
 
 	sleep(TIMEOUT_ELECTION); //pra evitar pacotes antigos remanescentes
 
@@ -915,15 +915,15 @@ void *bullyThread(void *arg) {
 
 	if (server->id == coordinatorId) {
         while(TRUE) {
-            recvfrom(sockfd, bufferReceive, PACKAGE_SIZE, 0, (struct sockaddr *) &rm_addr, &rmlen);
+            recvfrom(sockfd, bufferReceive, PACKET_SIZE, 0, (struct sockaddr *) &rm_addr, &rmlen);
             if (bufferReceive->type == TESTER) {
-                sendto(sockfd, ack, PACKAGE_SIZE, 0,(struct sockaddr *) &rm_addr, sizeof(struct sockaddr));
+                sendto(sockfd, ack, PACKET_SIZE, 0,(struct sockaddr *) &rm_addr, sizeof(struct sockaddr));
             }
         }
 	} else {
 	    setTimeoutElection(sockfd);
         while (TRUE) {
-            if(recvfrom(sockfd, bufferReceive, PACKAGE_SIZE, 0, (struct sockaddr *) &rm_addr, &rmlen) < 0) {
+            if(recvfrom(sockfd, bufferReceive, PACKET_SIZE, 0, (struct sockaddr *) &rm_addr, &rmlen) < 0) {
                 if (electionStatus == WAITING_NEW_COORDINATOR) {
                     DEBUG_PRINT2("BULLY - TIMEOUT NA ESPERA DO COORDENADOR\n"); //VERIFICAR DEPOIS
                 } else if (electionStatus == WITHOUT_ELECTION) {
@@ -933,13 +933,13 @@ void *bullyThread(void *arg) {
                 DEBUG_PRINT2("BULLY - NOVO PACOTE\n");
                 if(bufferReceive->type == ELECTION) {
                     if (electionStatus == WITHOUT_ELECTION) {
-                        sendto(sockfd, asnwer, PACKAGE_SIZE, 0,(struct sockaddr *) &rm_addr, sizeof(struct sockaddr));
+                        sendto(sockfd, asnwer, PACKET_SIZE, 0,(struct sockaddr *) &rm_addr, sizeof(struct sockaddr));
                         DEBUG_PRINT2("BULLY - ENVIADO ASNWER E INICIADO PRÓPRIA ELEIÇÃO\n");
                         electionStatus = IN_ELECTION;
                         pthread_create(&th2, NULL, startElection, (void*) server);
                     } else {
                         DEBUG_PRINT2("BULLY - RECEBEU UM ELECTION ATRASADO\n");
-                        sendto(sockfd, asnwer, PACKAGE_SIZE, 0,(struct sockaddr *) &rm_addr, sizeof(struct sockaddr)); //manda ack pra não ficar se elegendo
+                        sendto(sockfd, asnwer, PACKET_SIZE, 0,(struct sockaddr *) &rm_addr, sizeof(struct sockaddr)); //manda ack pra não ficar se elegendo
                     }
                 }
                 if (bufferReceive->type == COORDINATOR) {
@@ -1002,8 +1002,8 @@ int send_delete_to_replicas(char* user, char* file_path){
 		connectionDel->socket = sockfd;
 		connectionDel->address = &repl_addr;
 
-		Package *commandPackage = newPackage(DELETE,user,seqNumber,0,filename);
-		if(sendPackage(commandPackage, connectionDel, LIMITED) == FAILURE){
+		Packet *commandPacket = newPacket(DELETE,user,seqNumber,0,filename);
+		if(sendPacket(commandPacket, connectionDel, LIMITED) == FAILURE){
 			close(sockfd);
 			continue;
 		}
@@ -1047,8 +1047,8 @@ int send_upload_to_replicas(char* user, char* file_path){
 		connectionUp->socket = sockfd;
 		connectionUp->address = &repl_addr;
 
-		Package *commandPackage = newPackage(UPLOAD,user,seqNumber,0,filename);
-		if(sendPackage(commandPackage, connectionUp, LIMITED) == FAILURE){
+		Packet *commandPacket = newPacket(UPLOAD,user,seqNumber,0,filename);
+		if(sendPacket(commandPacket, connectionUp, LIMITED) == FAILURE){
 			close(sockfd);
 			continue;
 		}
@@ -1068,7 +1068,7 @@ int send_new_client_to_replicas(char* user, struct sockaddr_in* addr_client){
 	struct sockaddr_in repl_addr;
 	ServerList *current;
 	struct hostent *bk_server;
-	char data[sizeof(Package)];
+	char data[sizeof(Packet)];
 
 	Connection *connectionCli = malloc(sizeof(Connection));
 
@@ -1094,11 +1094,11 @@ int send_new_client_to_replicas(char* user, struct sockaddr_in* addr_client){
 		connectionCli->socket = sockfd;
 		connectionCli->address = &repl_addr;
 
-		bzero(data, sizeof(Package));
+		bzero(data, sizeof(Packet));
 		memcpy(data, addr_client, sizeof(struct sockaddr_in));
 
-		Package *commandPackage = newPackage(NEW_CLIENT,user,seqNumber,0,data);
-		if(sendPackage(commandPackage, connectionCli, LIMITED) == FAILURE){
+		Packet *commandPacket = newPacket(NEW_CLIENT,user,seqNumber,0,data);
+		if(sendPacket(commandPacket, connectionCli, LIMITED) == FAILURE){
 			close(sockfd);
 			continue;
 		}
@@ -1137,8 +1137,8 @@ void* replicaManagerThread(){
 
 	while (TRUE) {
 		seqnumReceive = 0;
-		Package *request = malloc(sizeof(Package));
-		receivePackage(connectionRM, request, seqnumReceive);
+		Packet *request = malloc(sizeof(Packet));
+		receivePacket(connectionRM, request, seqnumReceive);
 		seqnumReceive = 1 - seqnumReceive;
 
 		switch(request->type){

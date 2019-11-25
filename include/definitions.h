@@ -1,4 +1,4 @@
-//Package Type
+//Packet Type
 
 #define ACK 0
 #define CMD 1
@@ -15,7 +15,7 @@
 
 //Size
 
-#define PACKAGE_SIZE 1024
+#define PACKET_SIZE 1024
 #define DATA_SEGMENT_SIZE 1000
 #define USER_NAME_SIZE 18
 #define MAX_PATH 256
@@ -62,7 +62,7 @@
 // Connection
 
 #define TIMEOUT 3 // in seconds
-#define MAX_TRIES 1 // maximum number of tries for package transmission
+#define MAX_TRIES 1 // maximum number of tries for packet transmission
 #define SEQUENCE_SHIFT 2 //sequence number shift on data transmission
 #define LIST_START_SEQ 2 //sequence number shift for file list transmission
 #define MAX_LIST_SIZE 4000

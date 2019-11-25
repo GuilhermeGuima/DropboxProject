@@ -109,12 +109,12 @@ char *receiveList();
 	used after creating createSyncDir()
 	@input connection - the connection to the server
 	@input seqnum - the current sequence number for the protocol
-	@input seqnumReceive - the current sequence number for the receival of packages
+	@input seqnumReceive - the current sequence number for the receival of packets
 */
 void downloadAllFiles(Connection *connection, int *seqnum, int *seqnumReceive);
 
 /*
-	Closes the connection on the client side (i.e. sends an EXIT package to the server)
+	Closes the connection on the client side (i.e. sends an EXIT packet to the server)
 */
 void closeConnection();
 

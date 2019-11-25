@@ -1,12 +1,12 @@
 #include "../include/dropboxUtil.h"
 
-void printPackage(Package *package) {
+void printPacket(Packet *packet) {
     DEBUG_PRINT("PRINTANDO PACOTE\n");
-    printf("%hu\n", package->type);
-    printf("%s\n", package->user);
-    printf("%hu\n", package->seq);
-    printf("%hu\n", package->length);
-    printf("%s\n", package->data);
+    printf("%hu\n", packet->type);
+    printf("%s\n", packet->user);
+    printf("%hu\n", packet->seq);
+    printf("%hu\n", packet->length);
+    printf("%s\n", packet->data);
 }
 
 int setTimeout(int sockfd){
@@ -58,7 +58,7 @@ char* listDirectoryContents(char* dir_path){
     return s;
 }
 
-Package* newPackage(unsigned short int type, char* user, unsigned short int seq, unsigned short int length, char *data) {
+Packet* newPacket(unsigned short int type, char* user, unsigned short int seq, unsigned short int length, char *data) {
 
     DEBUG_PRINT("CRIANDO NOVO PACOTE\n");
     if (strlen(user) > USER_NAME_SIZE) {
@@ -66,26 +66,26 @@ Package* newPackage(unsigned short int type, char* user, unsigned short int seq,
         return NULL;
     }
 
-    Package *package = malloc(sizeof(*package));
-    strcpy (package->user, user);
-    package->type = type;
-    package->seq = seq;
-    package->length = length;
-    memcpy(package->data, data, DATA_SEGMENT_SIZE);
-    return package;
+    Packet *packet = malloc(sizeof(*packet));
+    strcpy (packet->user, user);
+    packet->type = type;
+    packet->seq = seq;
+    packet->length = length;
+    memcpy(packet->data, data, DATA_SEGMENT_SIZE);
+    return packet;
 
 }
 
-int sendPackage(Package *package, Connection *connection, int limited){
+int sendPacket(Packet *packet, Connection *connection, int limited){
     int n, tries = 0;
     int notACKed = TRUE;
     unsigned int length;
     struct sockaddr_in from;
-    Package *ackBuffer = malloc(PACKAGE_SIZE);
+    Packet *ackBuffer = malloc(PACKET_SIZE);
 
     do{
-        //DEBUG_PRINT("ENVIANDO PACOTE TIPO %d SEQ %d\n", package->type, package->seq);
-        n = sendto(connection->socket, package, PACKAGE_SIZE, 0, (const struct sockaddr *) connection->address, sizeof(struct sockaddr_in));
+        //DEBUG_PRINT("ENVIANDO PACOTE TIPO %d SEQ %d\n", packet->type, packet->seq);
+        n = sendto(connection->socket, packet, PACKET_SIZE, 0, (const struct sockaddr *) connection->address, sizeof(struct sockaddr_in));
 
         if (n < 0) {
             DEBUG_PRINT("ERRO AO ENVIAR PACOTE\n");
@@ -93,10 +93,10 @@ int sendPackage(Package *package, Connection *connection, int limited){
     	}
 
         length = sizeof(struct sockaddr_in);
-        if(recvfrom(connection->socket, ackBuffer, PACKAGE_SIZE, 0, (struct sockaddr *) &from, &length) < 0 ){
+        if(recvfrom(connection->socket, ackBuffer, PACKET_SIZE, 0, (struct sockaddr *) &from, &length) < 0 ){
             DEBUG_PRINT("TIMEOUT NO ENVIO DO PACOTE\n");
         } else {
-            if(ackBuffer->type == ACK && ackBuffer->seq == package->seq){
+            if(ackBuffer->type == ACK && ackBuffer->seq == packet->seq){
                 notACKed = FALSE;
             }else{
                 DEBUG_PRINT ("RECEBEU ACK %d FORA DE SEQUENCIA\n", ackBuffer->seq);
@@ -114,25 +114,25 @@ int sendPackage(Package *package, Connection *connection, int limited){
     return SUCCESS;
 }
 
-int receivePackage(Connection *connection, Package *buffer, int expectedSeq){
+int receivePacket(Connection *connection, Packet *buffer, int expectedSeq){
     unsigned int length, n;
     struct sockaddr_in *from = malloc(sizeof(struct sockaddr_in));
-    Package *package = malloc(PACKAGE_SIZE);
+    Packet *packet = malloc(PACKET_SIZE);
 
     length = sizeof(struct sockaddr_in);
 
     // blocking call
     while(1){
         //DEBUG_PRINT("RECEBENDO PACOTE %d port: %d\n", expectedSeq, ntohs(connection->address->sin_port));
-        if(recvfrom(connection->socket, buffer, PACKAGE_SIZE, 0, (struct sockaddr *) from, &length) < 0){
+        if(recvfrom(connection->socket, buffer, PACKET_SIZE, 0, (struct sockaddr *) from, &length) < 0){
             fprintf(stderr, "ERRO NO RECEBIMENTO DE PACOTE");
         }else{
             if(buffer->seq == expectedSeq){
                 DEBUG_PRINT("MANDANDO PACOTE DE ACK %d\n",expectedSeq);
-                // send ACK package
-                package->type = ACK;
-                package->seq = expectedSeq;
-                n = sendto(connection->socket, package, PACKAGE_SIZE, 0, (const struct sockaddr *) from, sizeof(struct sockaddr_in));
+                // send ACK packet
+                packet->type = ACK;
+                packet->seq = expectedSeq;
+                n = sendto(connection->socket, packet, PACKET_SIZE, 0, (const struct sockaddr *) from, sizeof(struct sockaddr_in));
 
                 if (n < 0) {
                     DEBUG_PRINT("ERRO AO ENVIAR PACOTE DE ACK\n");
@@ -143,22 +143,22 @@ int receivePackage(Connection *connection, Package *buffer, int expectedSeq){
             } else {
                 // discard duplicate and resend ACK
                 DEBUG_PRINT("RE-ENVIANDO PACOTE DE ACK %d, SEQ RECEBIDA %d\n", expectedSeq, buffer->seq);
-                package->type = ACK;
-                package->seq = expectedSeq;
-                n = sendto(connection->socket, package, PACKAGE_SIZE, 0, (const struct sockaddr *) &from, sizeof(struct sockaddr_in));
+                packet->type = ACK;
+                packet->seq = expectedSeq;
+                n = sendto(connection->socket, packet, PACKET_SIZE, 0, (const struct sockaddr *) &from, sizeof(struct sockaddr_in));
             }
         }
     }
 
     connection->address = from;
 
-    free(package);
+    free(packet);
     return SUCCESS;
 }
 
 void sendFile(char *file, Connection *connection, char* username) {
     FILE* pFile;
-    Package *package;
+    Packet *packet;
     int file_size = 0;
     int total_send = 0;
     unsigned short int seq = SEQUENCE_SHIFT; // start at two to avoid clash with comands sequence
@@ -170,8 +170,8 @@ void sendFile(char *file, Connection *connection, char* username) {
 
     // sends file size
     itoa(file_size, data);
-    package = newPackage(CMD, username, seq, 0, data);
-    sendPackage(package, connection, NOT_LIMITED);
+    packet = newPacket(CMD, username, seq, 0, data);
+    sendPacket(packet, connection, NOT_LIMITED);
     seq++;
 
     DEBUG_PRINT("FILE_SIZE: %d\n",file_size);
@@ -187,49 +187,49 @@ void sendFile(char *file, Connection *connection, char* username) {
             else {
                 fread(data, sizeof(char), DATA_SEGMENT_SIZE, pFile);
             }
-            package = newPackage(DATA, username, seq, length, data);
-            sendPackage(package, connection, NOT_LIMITED);
+            packet = newPacket(DATA, username, seq, length, data);
+            sendPacket(packet, connection, NOT_LIMITED);
             seq++;
         }
         fclose(pFile);
-        free(package);
-        package = NULL;
+        free(packet);
+        packet = NULL;
     }else{
        fprintf(stderr,"Erro ao abrir arquivo.\n");
     }
 }
 
 void receiveFile(Connection *connection, char** buffer, int *file_size){
-    Package *package = malloc(sizeof(Package));
+    Packet *packet = malloc(sizeof(Packet));
     int seqFile = SEQUENCE_SHIFT;
     int offset = 0;
 
-    // receives package with file_size
-    receivePackage(connection, package, seqFile);
+    // receives packet with file_size
+    receivePacket(connection, packet, seqFile);
     seqFile++;
-    *file_size = atoi(package->data);
+    *file_size = atoi(packet->data);
     DEBUG_PRINT("FILE_SIZE: %d\n",*file_size);
 
     int written = 0;
 
     if(*file_size != 0){
-        receivePackage(connection, package, seqFile);
-        *buffer = malloc((package->length+1)*DATA_SEGMENT_SIZE);
+        receivePacket(connection, packet, seqFile);
+        *buffer = malloc((packet->length+1)*DATA_SEGMENT_SIZE);
         
-        while(package->length != package->seq-SEQUENCE_SHIFT-1){
-            memcpy(*buffer+offset, package->data, DATA_SEGMENT_SIZE);
+        while(packet->length != packet->seq-SEQUENCE_SHIFT-1){
+            memcpy(*buffer+offset, packet->data, DATA_SEGMENT_SIZE);
             written += DATA_SEGMENT_SIZE;
             seqFile++;
-            offset = (package->seq-SEQUENCE_SHIFT)*DATA_SEGMENT_SIZE;
-            receivePackage(connection, package, seqFile);
+            offset = (packet->seq-SEQUENCE_SHIFT)*DATA_SEGMENT_SIZE;
+            receivePacket(connection, packet, seqFile);
         }
 
-        memcpy(*buffer+offset, package->data, *file_size-written);
+        memcpy(*buffer+offset, packet->data, *file_size-written);
         written += *file_size-written;
     }
 
-    free(package);
-    package = NULL;
+    free(packet);
+    packet = NULL;
 }
 
 void saveFile(char *buffer, int file_size, char *path) {

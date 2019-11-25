@@ -143,8 +143,8 @@ void selectCommand(int new) {
 }
 
 void closeConnection(){
-	Package *commandPackage = newPackage(EXIT,user,seqnum,0,CMD_EXIT);
-	sendPackage(commandPackage, connection, NOT_LIMITED);
+	Packet *commandPacket = newPacket(EXIT,user,seqnum,0,CMD_EXIT);
+	sendPacket(commandPacket, connection, NOT_LIMITED);
 }
 
 int firstConnection(char *user, Connection *connection) {
@@ -154,11 +154,11 @@ int firstConnection(char *user, Connection *connection) {
     bzero(buffer, DATA_SEGMENT_SIZE);
     strcpy(buffer, user);
 
-    Package *p = newPackage(CMD, user, seqnum, 0, buffer);
-    sendPackage(p, connection, NOT_LIMITED);
+    Packet *p = newPacket(CMD, user, seqnum, 0, buffer);
+    sendPacket(p, connection, NOT_LIMITED);
     seqnum = 1 - seqnum;
 
-    receivePackage(connection, p, seqnumReceive);
+    receivePacket(connection, p, seqnumReceive);
     seqnumReceive = 1 - seqnumReceive;
 
     if (strcmp(p->data, ACCESS_ERROR) == 0) {
@@ -176,8 +176,8 @@ int firstConnection(char *user, Connection *connection) {
 
 int uploadFile(char *file_path, int *seqNumber, Connection *connection) {
 	char* filename = basename(file_path);
-	Package *commandPackage = newPackage(UPLOAD,user,*seqNumber,0,filename);
-	sendPackage(commandPackage, connection, NOT_LIMITED);
+	Packet *commandPacket = newPacket(UPLOAD,user,*seqNumber,0,filename);
+	sendPacket(commandPacket, connection, NOT_LIMITED);
 	DEBUG_PRINT("seq num: %d\n", *seqNumber);
 	*seqNumber = 1 - *seqNumber;
 
@@ -198,8 +198,8 @@ int downloadFile(char *file, Connection *connection) {
 	int file_size;
 	char *buffer = NULL;
 
-	Package *commandPackage = newPackage(DOWNLOAD,user,seqnum,0,filename);
-	sendPackage(commandPackage, connection, NOT_LIMITED);
+	Packet *commandPacket = newPacket(DOWNLOAD,user,seqnum,0,filename);
+	sendPacket(commandPacket, connection, NOT_LIMITED);
 	seqnum = 1 - seqnum;
 
 	receiveFile(connection, &buffer, &file_size);
@@ -210,16 +210,16 @@ int downloadFile(char *file, Connection *connection) {
 
 int deleteFile(char *file, int *seqNumber, Connection *connection) {
 	char* filename = basename(file);
-	Package *commandPackage = newPackage(DELETE,user,*seqNumber,0,filename);
-	sendPackage(commandPackage, connection, NOT_LIMITED);
+	Packet *commandPacket = newPacket(DELETE,user,*seqNumber,0,filename);
+	sendPacket(commandPacket, connection, NOT_LIMITED);
 	*seqNumber = 1 - *seqNumber;
 
 	return SUCCESS;
 }
 
 void listServer(Connection *connection) {
-	Package *commandPackage = newPackage(LISTSERVER,user,seqnum,0,CMD_LISTCLIENT);
-	sendPackage(commandPackage, connection, NOT_LIMITED);
+	Packet *commandPacket = newPacket(LISTSERVER,user,seqnum,0,CMD_LISTCLIENT);
+	sendPacket(commandPacket, connection, NOT_LIMITED);
 	seqnum = 1 - seqnum;
 
 	char *s = receiveList();
@@ -230,10 +230,10 @@ char *receiveList(){
 	char *s = malloc(MAX_LIST_SIZE);
 	int i;
 	bzero(s,MAX_LIST_SIZE);
-	Package *buffer = malloc(sizeof(Package));
+	Packet *buffer = malloc(sizeof(Packet));
 
 	for(i = 0; i < MAX_LIST_SIZE/DATA_SEGMENT_SIZE; i++){
-		receivePackage(connection, buffer, LIST_START_SEQ+i);
+		receivePacket(connection, buffer, LIST_START_SEQ+i);
 		strcpy(s+i*(DATA_SEGMENT_SIZE-1),buffer->data);
 	}
 
@@ -281,11 +281,11 @@ void *sync_thread(){
 	bzero(buf, DATA_SEGMENT_SIZE);
     strcpy(buf, user);
 
-    Package *p = newPackage(SYNC, user, seqnumSyn, 0, buf);
-    sendPackage(p, connectionSync, NOT_LIMITED);
+    Packet *p = newPacket(SYNC, user, seqnumSyn, 0, buf);
+    sendPacket(p, connectionSync, NOT_LIMITED);
     seqnumSyn = 1 - seqnumSyn;
 
-    receivePackage(connectionSync, p, seqnumReceiveSyn);
+    receivePacket(connectionSync, p, seqnumReceiveSyn);
     seqnumReceiveSyn = 1 - seqnumReceiveSyn;
 
     if (strcmp(p->data, ACCESS_ERROR) == 0) {
@@ -349,17 +349,17 @@ void downloadAllFiles(Connection *connection, int *seqnum, int *seqnumReceive){
 	int nbFiles, i, file_size;
 	char *buffer, *file_path;
 
-	Package *p = newPackage(DOWNLOAD_ALL, user, *seqnum, 0, "");
-    sendPackage(p, connection, NOT_LIMITED);
+	Packet *p = newPacket(DOWNLOAD_ALL, user, *seqnum, 0, "");
+    sendPacket(p, connection, NOT_LIMITED);
     *seqnum = 1 - *seqnum;
 
-    // the response package from a DOWNLOAD_ALL request has the nb of files as data
-    receivePackage(connection, p, *seqnumReceive);
+    // the response packet from a DOWNLOAD_ALL request has the nb of files as data
+    receivePacket(connection, p, *seqnumReceive);
     *seqnumReceive = 1 - *seqnumReceive;
 
     nbFiles = atoi(p->data);
     for(i = 0; i < nbFiles; i++){
-    	receivePackage(connection, p, *seqnumReceive);
+    	receivePacket(connection, p, *seqnumReceive);
     	*seqnumReceive = 1 - *seqnumReceive;
 
     	receiveFile(connection, &buffer, &file_size);
@@ -383,11 +383,11 @@ void *broadcast_thread(){
     strcpy(bufFirst, user);
 
     // handshake to establish broadcast connection
-    Package *p = newPackage(BROADCAST, user, seqnum, 0, bufFirst);
-    sendPackage(p, connectionBroad, NOT_LIMITED);
+    Packet *p = newPacket(BROADCAST, user, seqnum, 0, bufFirst);
+    sendPacket(p, connectionBroad, NOT_LIMITED);
     seqnum = 1 - seqnum;
 
-    receivePackage(connectionBroad, p, seqnumReceive);
+    receivePacket(connectionBroad, p, seqnumReceive);
     seqnumReceive = 1 - seqnumReceive;
 
     // creation of the broadcast client socket
@@ -410,12 +410,12 @@ void *broadcast_thread(){
     }
 
     seqnumReceive = 0; seqnum = 0;
-    Package *request = malloc(sizeof(Package));
+    Packet *request = malloc(sizeof(Packet));
 
     while(TRUE){
     	seqnumReceive = 0;
-    	//printf("Waiting for packages bcast %d\n", ntohs(connectionBroad->address->sin_port));
-		receivePackage(connectionBroad, request, seqnumReceive);
+    	//printf("Waiting for packets bcast %d\n", ntohs(connectionBroad->address->sin_port));
+		receivePacket(connectionBroad, request, seqnumReceive);
 		seqnumReceive = 1 - seqnumReceive;
 		pthread_mutex_lock(&broadcastMutex);
 
@@ -479,17 +479,17 @@ void *election_thread(){
 	connectionBroad->address = &cli_addr;
 
 	seqnumReceive = 0; seqnum = 0;
-	Package *request = malloc(sizeof(Package));
+	Packet *request = malloc(sizeof(Packet));
 
     while(TRUE){
     	seqnumReceive = 0;
 
-		receivePackage(connectionBroad, request, seqnumReceive);
+		receivePacket(connectionBroad, request, seqnumReceive);
 		seqnumReceive = 1 - seqnumReceive;
 
 		switch(request->type){
 			case ANNOUNCE_ELECTION:
-				/** Receive package of new server **/
+				/** Receive packet of new server **/
 				server = gethostbyname(inet_ntoa(connectionBroad->address->sin_addr));
 
 				/** Cancel all other running threads for client **/

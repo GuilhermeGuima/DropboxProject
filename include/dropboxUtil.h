@@ -43,14 +43,14 @@
   #define DEBUG_PRINT_COND(fmt, args...)
 #endif
 
-// data struct representing an UDP data package
-typedef struct package {
+// data struct representing an UDP data packet
+typedef struct packet {
   unsigned short int type;
   unsigned short int seq;
   unsigned short int length;
   char user[USER_NAME_SIZE];
   char data[DATA_SEGMENT_SIZE];
-} Package;
+} Packet;
 
 // data struct for an UDP connection
 typedef struct connection_udp {
@@ -59,24 +59,24 @@ typedef struct connection_udp {
 } Connection;
 
 /*******************************************************************
-                  PACKAGE FUNCTIONS
+                  PACKET FUNCTIONS
 ********************************************************************/
 
-/*  Sends a package (blocking until ACK is received)
-  @input package - the package to be sent
+/*  Sends a packet (blocking until ACK is received)
+  @input packet - the packet to be sent
   @input connection - the connection to be used
   @input limited - whether the request has a limit of tries
   @return FAILURE/SUCCESS
 */
-int sendPackage(Package *package, Connection *connection, int limited);
+int sendPacket(Packet *packet, Connection *connection, int limited);
 
-/*  Receives a package (blocking call)
+/*  Receives a packet (blocking call)
   @input connection - the connection to be used
-  @output buffer - the package buffer in which the received package will be put
+  @output buffer - the packet buffer in which the received packet will be put
   @input - sequence number for this connection
   @return FAILURE/SUCCESS
 */
-int receivePackage(Connection *connection, Package *buffer, int expectedSeq);
+int receivePacket(Connection *connection, Packet *buffer, int expectedSeq);
 
 /*  Receives a file
   @input connection - the connection to be used
@@ -99,15 +99,15 @@ void sendFile(char *file, Connection *connection, char* username);
 */
 void saveFile(char *buffer, int file_size, char *path);
 
-/*  Creates a new package
-  @input type - type of package (avilable types are found in definitions.h)
+/*  Creates a new packet
+  @input type - type of packet (avilable types are found in definitions.h)
   @input user - the user's username
-  @input seq - the package sequence number
+  @input seq - the packet sequence number
   @input length - if the file is part of a multipart message, the length of that message
-  @input data - the data the package is carrying
-  @return a pointer to the created package
+  @input data - the data the packet is carrying
+  @return a pointer to the created packet
 */
-Package* newPackage(unsigned short int type, char* user, unsigned short int seq, unsigned short int length, char *data);
+Packet* newPacket(unsigned short int type, char* user, unsigned short int seq, unsigned short int length, char *data);
 
 /*******************************************************************
                   FILE SYSTEM FUNCTIONS
@@ -159,9 +159,9 @@ char* itoa(int i, char b[]);
                   DEBUGGING FUNCTIONS
 ********************************************************************/
 
-/*  Prints the contents of a package
-  @input package - package to be printed
+/*  Prints the contents of a packet
+  @input packet - packet to be printed
 */
-void printPackage(Package *package);
+void printPacket(Packet *packet);
 
 #endif
