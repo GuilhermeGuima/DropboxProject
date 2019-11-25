@@ -23,7 +23,7 @@ int main(int argc, char *argv[]) {
 	DEBUG_PRINT2("LISTA ESTATICA DE SERVIDORES \n ---------------------------------------------- \n\n");
 
 	while(auxList != NULL) {
-        DEBUG_PRINT2("ID: %d ENDEREÇO IP: %s PORTA ELEICAO: %d PORTA \n", auxList->server->id, auxList->server->ip, auxList->server->bullyPort);
+        DEBUG_PRINT2("ID: %d ENDEREÇO IP: %s PORTA ELEICAO: %d\n", auxList->server->id, auxList->server->ip, auxList->server->bullyPort);
         auxList = auxList->next;
 	}
 	DEBUG_PRINT2("\n");
