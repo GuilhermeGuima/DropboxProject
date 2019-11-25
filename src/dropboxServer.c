@@ -3,7 +3,7 @@
 
 ClientList *client_list;
 sem_t portBarrier;
-pthread_t main_thread, bully_thread;
+pthread_t main_thread, bully_thread, replica_thread;
 pthread_mutex_t clientListMutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t serverListMutex = PTHREAD_MUTEX_INITIALIZER;
 ServerList *svList;
@@ -47,7 +47,8 @@ int main(int argc, char *argv[]) {
         if (server->id == coordinatorId) {
             pthread_create(&main_thread, NULL, coordinatorFunction, NULL);
         } else {
-            pthread_create(&main_thread, NULL, replicaFunction, (void*) server);
+            pthread_create(&main_thread, NULL, electionFunction, (void*) server);
+            pthread_create(&replica_thread, NULL, replicaManagerThread, NULL);
         }
 	}
 
@@ -146,7 +147,7 @@ void* coordinatorFunction() {         //MAIN DA PT1 DO TRABALHO
 	return NULL;
 }
 
-void* replicaFunction(void* arg) {
+void* electionFunction(void* arg) {
     int sockfd, n, status;
     int *res;
     int changedCoordinator = FALSE;
@@ -173,7 +174,7 @@ void* replicaFunction(void* arg) {
 
 	printf("RM a postos\n");
 
-	while(!changedCoordinator) {
+	while(TRUE) {
 
         bzero(buffer, 256);
         strcpy(buffer, "OK");
@@ -189,8 +190,12 @@ void* replicaFunction(void* arg) {
              status = pthread_join(bully_thread, (void **) &res);
              if (status != 0)
                 exit(1);
+             changedCoordinator = coordinatorId != *res;
              coordinatorId = *res;
-             changedCoordinator = TRUE;
+
+             if(changedCoordinator){
+             	// TODO: change connections to new server
+             }
 
         } else {
             printf("SYSTEM: %s\n", buffer);
@@ -967,4 +972,55 @@ void *bullyThread(void *arg) {
             }
         }
 	}
+}
+
+// thread to listen for requests coming from the coordinator
+// to duplicate all upload and delete operations in the backup servers
+void* replicaManagerThread(){
+	int sockfd, file_size;
+	char *buffer = NULL, *file_path = NULL;
+	struct sockaddr_in repl_addr;
+	Connection *connectionRM = malloc(sizeof(Connection));
+	int seqnumReceive = 0;
+
+	if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) == -1)
+		fprintf(stderr, "ERROR opening socket");
+
+	repl_addr.sin_family = AF_INET;
+	repl_addr.sin_port = htons(REPLICA_PORT);
+	repl_addr.sin_addr.s_addr = INADDR_ANY;
+	bzero(&(repl_addr.sin_zero), 8);
+
+	if (bind(sockfd, (struct sockaddr *) &repl_addr, sizeof(struct sockaddr)) < 0)
+		fprintf(stderr, "ERROR on binding");
+
+	connectionRM->socket = sockfd;
+	connectionRM->address = &repl_addr;
+
+	while (TRUE) {
+		Package *request = malloc(sizeof(Package));
+		receivePackage(connectionRM, request, seqnumReceive);
+		seqnumReceive = 1 - seqnumReceive;
+
+		switch(request->type){
+			case UPLOAD:
+				receiveFile(connectionRM, &buffer, &file_size);
+				if(file_size != 0){
+					file_path = makePath(request->user,request->data);
+					file_path = makePath(server_folder, file_path);
+					saveFile(buffer, file_size, file_path);
+				}
+				break;
+			case DELETE:
+				file_path = makePath(request->user,request->data);
+				file_path = makePath(server_folder, file_path);
+				remove(file_path);
+				break;
+			case NEW_CLIENT:
+				//TODO: create protocol for new client
+				break;
+			default: fprintf(stderr, "Invalid command number %d for RM thread\n", request->type);
+		}
+	}
+
 }

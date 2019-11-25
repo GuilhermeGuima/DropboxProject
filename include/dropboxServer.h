@@ -140,13 +140,13 @@ void *clientThread(void *arg);
 */
 void *syncThread(void *arg);
 
-
+void* replicaManagerThread();
 
 
 // DEIXAR BONITO DEPOIS NATY
 
 void *coordinatorFunction();
-void *replicaFunction(void* arg);
+void *electionFunction(void* arg);
 int setTimeoutElection(int sockfd);
 Server* getServer(int id);
 void initializer_static_svlist();

@@ -11,6 +11,7 @@
 #define SYNC 8
 #define BROADCAST 9
 #define DOWNLOAD_ALL 10
+#define NEW_CLIENT 11
 
 //Size
 
@@ -64,6 +65,7 @@
 #define MAX_LIST_SIZE 4000
 #define CLIENTS_PORT 30000
 #define FRONT_END_PORT 30001
+#define REPLICA_PORT 30002
 
 //Election
 
