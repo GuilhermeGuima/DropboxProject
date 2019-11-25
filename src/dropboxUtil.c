@@ -105,7 +105,7 @@ int sendPackage(Package *package, Connection *connection, int limited){
 
         tries++;
 
-        if(tries >= MAX_TRIES && limited) break;
+        if(tries >= MAX_TRIES && limited) return FAILURE;
 
     } while(notACKed);
 

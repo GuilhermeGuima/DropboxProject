@@ -975,6 +975,47 @@ void *bullyThread(void *arg) {
 	}
 }
 
+int send_delete_to_replicas(char* user, char* file_path){
+	char* filename = basename(file_path);
+	int seqNumber = 0, sockfd;
+	struct sockaddr_in repl_addr;
+	ServerList *current;
+	struct hostent *bk_server;
+
+	Connection *connectionDel = malloc(sizeof(Connection));
+
+	/* TODO: This is currently sequential, could be improved by creating n parallel threads
+	   each thread uploading the file to one of the backups */
+	pthread_mutex_lock(&serverListMutex);
+	current = svList;
+	while(current != NULL){
+		if(current->server->id == coordinatorId) continue;
+
+		if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) == -1)
+			fprintf(stderr, "ERROR opening socket");
+
+		bk_server = gethostbyname(current->server->ip);
+		repl_addr.sin_family = AF_INET;
+		repl_addr.sin_port = htons(REPLICA_PORT);
+		repl_addr.sin_addr = *((struct in_addr *)bk_server->h_addr);
+		bzero(&(repl_addr.sin_zero), 8);
+
+		if (bind(sockfd, (struct sockaddr *) &repl_addr, sizeof(struct sockaddr)) < 0)
+			fprintf(stderr, "ERROR on binding");
+
+		connectionDel->socket = sockfd;
+		connectionDel->address = &repl_addr;
+
+		Package *commandPackage = newPackage(DELETE,user,seqNumber,0,filename);
+		if(sendPackage(commandPackage, connectionDel, LIMITED) == FAILURE)
+			continue;
+		seqNumber = 1 - seqNumber;
+	}
+	pthread_mutex_unlock(&serverListMutex);
+
+	return SUCCESS;
+}
+
 int send_upload_to_replicas(char* user, char* file_path, char* data, int file_size){
 	char* filename = basename(file_path);
 	int seqNumber = 0, sockfd;
@@ -989,6 +1030,8 @@ int send_upload_to_replicas(char* user, char* file_path, char* data, int file_si
 	pthread_mutex_lock(&serverListMutex);
 	current = svList;
 	while(current != NULL){
+		if(current->server->id == coordinatorId) continue;
+
 		if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) == -1)
 			fprintf(stderr, "ERROR opening socket");
 
@@ -1005,7 +1048,8 @@ int send_upload_to_replicas(char* user, char* file_path, char* data, int file_si
 		connectionUp->address = &repl_addr;
 
 		Package *commandPackage = newPackage(UPLOAD,user,seqNumber,0,filename);
-		sendPackage(commandPackage, connectionUp, NOT_LIMITED);
+		if(sendPackage(commandPackage, connectionUp, LIMITED) == FAILURE)
+			continue;
 		seqNumber = 1 - seqNumber;
 
 		sendFile(file_path, connectionUp, user);
