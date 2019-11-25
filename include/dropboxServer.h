@@ -155,3 +155,6 @@ void sendCoordinatorMessage(Server* server);
 void *testCoordinator(void *arg);
 void *startElection(void *arg);
 void *bullyThread(void *arg);
+int send_delete_to_replicas(char* user, char* file_path);
+int send_upload_to_replicas(char* user, char* file_path);
+int send_new_client_to_replicas(char* user, struct sockaddr_in* addr_client);

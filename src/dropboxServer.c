@@ -127,8 +127,8 @@ void* coordinatorFunction() {         //MAIN DA PT1 DO TRABALHO
 		} else{
 			if (approveClient(client, &client_list)) {
 				if(buffer->type == BROADCAST){
-					// TODO: send_new_client_to_replicas()
 					addClient(client, &client_list);
+					send_new_client_to_replicas(client->username, &(client->addr[0]));
 					*port_count = *port_count - 1;	//no new port is assigned for a broadcast
 				}
 			}else{
@@ -330,9 +330,7 @@ void *clientThread(void *arg) {
 				file_path = makePath(request->user,request->data);
 				file_path = makePath(server_folder, file_path);
 				saveFile(buffer, file_size, file_path);
-
-				//TODO: send_to_upload_to_replicas();
-
+				send_upload_to_replicas(request->user, file_path);
 				broadcast(UPLOAD,request->data, request->user);
 				break;
 			case DOWNLOAD:
@@ -346,7 +344,7 @@ void *clientThread(void *arg) {
 				file_path = makePath(request->user,request->data);
 				file_path = makePath(server_folder, file_path);
 				if(remove(file_path) == 0){
-					//TODO: send_to_delete_to_replicas();
+					send_delete_to_replicas(request->user, file_path);
 					broadcast(DELETE,request->data, request->user);
 				}
 				break;
@@ -406,9 +404,7 @@ void *syncThread(void *arg) {
 					file_path = makePath(request->user,request->data);
 					file_path = makePath(server_folder, file_path);
 					saveFile(buffer, file_size, file_path);
-
-					//TODO: send_upload_to_replicas()
-
+					send_upload_to_replicas(request->user, file_path);
 					broadcastUnique(UPLOAD, request->data, request->user, *connection->address);
 				}
 				break;
@@ -416,7 +412,7 @@ void *syncThread(void *arg) {
 				file_path = makePath(request->user,request->data);
 				file_path = makePath(server_folder, file_path);
 				if(remove(file_path) == 0){
-					//TODO: send_delete_to_replicas()
+					send_delete_to_replicas(request->user,file_path);
 					broadcastUnique(DELETE,request->data, request->user, *connection->address);
 				}
 				break;
@@ -1007,16 +1003,20 @@ int send_delete_to_replicas(char* user, char* file_path){
 		connectionDel->address = &repl_addr;
 
 		Package *commandPackage = newPackage(DELETE,user,seqNumber,0,filename);
-		if(sendPackage(commandPackage, connectionDel, LIMITED) == FAILURE)
+		if(sendPackage(commandPackage, connectionDel, LIMITED) == FAILURE){
+			close(sockfd);
 			continue;
+		}
 		seqNumber = 1 - seqNumber;
+
+		close(sockfd);
 	}
 	pthread_mutex_unlock(&serverListMutex);
 
 	return SUCCESS;
 }
 
-int send_upload_to_replicas(char* user, char* file_path, char* data, int file_size){
+int send_upload_to_replicas(char* user, char* file_path){
 	char* filename = basename(file_path);
 	int seqNumber = 0, sockfd;
 	struct sockaddr_in repl_addr;
@@ -1048,11 +1048,63 @@ int send_upload_to_replicas(char* user, char* file_path, char* data, int file_si
 		connectionUp->address = &repl_addr;
 
 		Package *commandPackage = newPackage(UPLOAD,user,seqNumber,0,filename);
-		if(sendPackage(commandPackage, connectionUp, LIMITED) == FAILURE)
+		if(sendPackage(commandPackage, connectionUp, LIMITED) == FAILURE){
+			close(sockfd);
 			continue;
+		}
 		seqNumber = 1 - seqNumber;
 
 		sendFile(file_path, connectionUp, user);
+
+		close(sockfd);
+	}
+	pthread_mutex_unlock(&serverListMutex);
+
+	return SUCCESS;
+}
+
+int send_new_client_to_replicas(char* user, struct sockaddr_in* addr_client){
+	int seqNumber = 0, sockfd;
+	struct sockaddr_in repl_addr;
+	ServerList *current;
+	struct hostent *bk_server;
+	char data[sizeof(Package)];
+
+	Connection *connectionCli = malloc(sizeof(Connection));
+
+	/* TODO: This is currently sequential, could be improved by creating n parallel threads
+	   each thread uploading the file to one of the backups */
+	pthread_mutex_lock(&serverListMutex);
+	current = svList;
+	while(current != NULL){
+		if(current->server->id == coordinatorId) continue;
+
+		if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) == -1)
+			fprintf(stderr, "ERROR opening socket");
+
+		bk_server = gethostbyname(current->server->ip);
+		repl_addr.sin_family = AF_INET;
+		repl_addr.sin_port = htons(REPLICA_PORT);
+		repl_addr.sin_addr = *((struct in_addr *)bk_server->h_addr);
+		bzero(&(repl_addr.sin_zero), 8);
+
+		if (bind(sockfd, (struct sockaddr *) &repl_addr, sizeof(struct sockaddr)) < 0)
+			fprintf(stderr, "ERROR on binding");
+
+		connectionCli->socket = sockfd;
+		connectionCli->address = &repl_addr;
+
+		bzero(data, sizeof(Package));
+		memcpy(data, addr_client, sizeof(struct sockaddr_in));
+
+		Package *commandPackage = newPackage(NEW_CLIENT,user,seqNumber,0,data);
+		if(sendPackage(commandPackage, connectionCli, LIMITED) == FAILURE){
+			close(sockfd);
+			continue;
+		}
+		seqNumber = 1 - seqNumber;
+
+		close(sockfd);
 	}
 	pthread_mutex_unlock(&serverListMutex);
 
