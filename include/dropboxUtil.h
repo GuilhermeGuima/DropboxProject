@@ -65,9 +65,10 @@ typedef struct connection_udp {
 /*  Sends a package (blocking until ACK is received)
   @input package - the package to be sent
   @input connection - the connection to be used
+  @input limited - whether the request has a limit of tries
   @return FAILURE/SUCCESS
 */
-int sendPackage(Package *package, Connection *connection);
+int sendPackage(Package *package, Connection *connection, int limited);
 
 /*  Receives a package (blocking call)
   @input connection - the connection to be used

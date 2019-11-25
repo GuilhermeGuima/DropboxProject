@@ -76,8 +76,8 @@ Package* newPackage(unsigned short int type, char* user, unsigned short int seq,
 
 }
 
-int sendPackage(Package *package, Connection *connection){
-    int n;
+int sendPackage(Package *package, Connection *connection, int limited){
+    int n, tries = 0;
     int notACKed = TRUE;
     unsigned int length;
     struct sockaddr_in from;
@@ -102,6 +102,10 @@ int sendPackage(Package *package, Connection *connection){
                 DEBUG_PRINT ("RECEBEU ACK %d FORA DE SEQUENCIA\n", ackBuffer->seq);
             }
         }
+
+        tries++;
+
+        if(tries >= MAX_TRIES && limited) break;
 
     } while(notACKed);
 
@@ -167,7 +171,7 @@ void sendFile(char *file, Connection *connection, char* username) {
     // sends file size
     itoa(file_size, data);
     package = newPackage(CMD, username, seq, 0, data);
-    sendPackage(package, connection);
+    sendPackage(package, connection, NOT_LIMITED);
     seq++;
 
     DEBUG_PRINT("FILE_SIZE: %d\n",file_size);
@@ -184,7 +188,7 @@ void sendFile(char *file, Connection *connection, char* username) {
                 fread(data, sizeof(char), DATA_SEGMENT_SIZE, pFile);
             }
             package = newPackage(DATA, username, seq, length, data);
-            sendPackage(package, connection);
+            sendPackage(package, connection, NOT_LIMITED);
             seq++;
         }
         fclose(pFile);

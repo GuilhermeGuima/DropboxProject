@@ -144,7 +144,7 @@ void selectCommand(int new) {
 
 void closeConnection(){
 	Package *commandPackage = newPackage(EXIT,user,seqnum,0,CMD_EXIT);
-	sendPackage(commandPackage, connection);
+	sendPackage(commandPackage, connection, NOT_LIMITED);
 }
 
 int firstConnection(char *user, Connection *connection) {
@@ -155,7 +155,7 @@ int firstConnection(char *user, Connection *connection) {
     strcpy(buffer, user);
 
     Package *p = newPackage(CMD, user, seqnum, 0, buffer);
-    sendPackage(p, connection);
+    sendPackage(p, connection, NOT_LIMITED);
     seqnum = 1 - seqnum;
 
     receivePackage(connection, p, seqnumReceive);
@@ -177,7 +177,7 @@ int firstConnection(char *user, Connection *connection) {
 int uploadFile(char *file_path, int *seqNumber, Connection *connection) {
 	char* filename = basename(file_path);
 	Package *commandPackage = newPackage(UPLOAD,user,*seqNumber,0,filename);
-	sendPackage(commandPackage, connection);
+	sendPackage(commandPackage, connection, NOT_LIMITED);
 	DEBUG_PRINT("seq num: %d\n", *seqNumber);
 	*seqNumber = 1 - *seqNumber;
 
@@ -199,7 +199,7 @@ int downloadFile(char *file, Connection *connection) {
 	char *buffer = NULL;
 
 	Package *commandPackage = newPackage(DOWNLOAD,user,seqnum,0,filename);
-	sendPackage(commandPackage, connection);
+	sendPackage(commandPackage, connection, NOT_LIMITED);
 	seqnum = 1 - seqnum;
 
 	receiveFile(connection, &buffer, &file_size);
@@ -211,7 +211,7 @@ int downloadFile(char *file, Connection *connection) {
 int deleteFile(char *file, int *seqNumber, Connection *connection) {
 	char* filename = basename(file);
 	Package *commandPackage = newPackage(DELETE,user,*seqNumber,0,filename);
-	sendPackage(commandPackage, connection);
+	sendPackage(commandPackage, connection, NOT_LIMITED);
 	*seqNumber = 1 - *seqNumber;
 
 	return SUCCESS;
@@ -219,7 +219,7 @@ int deleteFile(char *file, int *seqNumber, Connection *connection) {
 
 void listServer(Connection *connection) {
 	Package *commandPackage = newPackage(LISTSERVER,user,seqnum,0,CMD_LISTCLIENT);
-	sendPackage(commandPackage, connection);
+	sendPackage(commandPackage, connection, NOT_LIMITED);
 	seqnum = 1 - seqnum;
 
 	char *s = receiveList();
@@ -282,7 +282,7 @@ void *sync_thread(){
     strcpy(buf, user);
 
     Package *p = newPackage(SYNC, user, seqnumSyn, 0, buf);
-    sendPackage(p, connectionSync);
+    sendPackage(p, connectionSync, NOT_LIMITED);
     seqnumSyn = 1 - seqnumSyn;
 
     receivePackage(connectionSync, p, seqnumReceiveSyn);
@@ -350,7 +350,7 @@ void downloadAllFiles(Connection *connection, int *seqnum, int *seqnumReceive){
 	char *buffer, *file_path;
 
 	Package *p = newPackage(DOWNLOAD_ALL, user, *seqnum, 0, "");
-    sendPackage(p, connection);
+    sendPackage(p, connection, NOT_LIMITED);
     *seqnum = 1 - *seqnum;
 
     // the response package from a DOWNLOAD_ALL request has the nb of files as data
@@ -384,7 +384,7 @@ void *broadcast_thread(){
 
     // handshake to establish broadcast connection
     Package *p = newPackage(BROADCAST, user, seqnum, 0, bufFirst);
-    sendPackage(p, connectionBroad);
+    sendPackage(p, connectionBroad, NOT_LIMITED);
     seqnum = 1 - seqnum;
 
     receivePackage(connectionBroad, p, seqnumReceive);

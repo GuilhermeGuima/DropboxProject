@@ -139,7 +139,7 @@ void* coordinatorFunction() {         //MAIN DA PT1 DO TRABALHO
 		}
 
 		Package *p = newPackage(CMD,client->username,seqnumSend,0,portMapper);
-		sendPackage(p,&connection);
+		sendPackage(p,&connection, NOT_LIMITED);
 		seqnumSend = 1 - seqnumSend;
 	}
 
@@ -273,7 +273,7 @@ void sendBroadcastMessage(struct sockaddr_in *addr, int operation, char *file, c
 
     // sends file name and operation
 	Package *p = newPackage(operation,username,0,0,file);
-	sendPackage(p,&connection);
+	sendPackage(p,&connection, NOT_LIMITED);
 
 	if(operation == UPLOAD){
 		// sends file
@@ -425,7 +425,7 @@ void *syncThread(void *arg) {
 				itoa(nbFiles, nbFilesBuffer);
 				Package *p = newPackage(CMD, request->user, seqnumSend, 0, nbFilesBuffer);
 				seqnumSend = 1 - seqnumSend;
-				sendPackage(p, connection);
+				sendPackage(p, connection, NOT_LIMITED);
 				sendAllFiles(request->user, connection, seqnumSend);
 
 				break;
@@ -459,7 +459,7 @@ void sendAllFiles(char *username, Connection *connection, int seqnum){
             }else{
             	// sends file name
             	p = newPackage(CMD, username, seqnum, 0, dp->d_name);
-                sendPackage(p, connection);
+                sendPackage(p, connection, NOT_LIMITED);
                 seqnum = 1 - seqnum;
 
                 // sends file
@@ -499,7 +499,7 @@ void sendList(char* dir_path, char* username, Connection *connection){
 		memcpy(buf,s+i*(DATA_SEGMENT_SIZE-1),DATA_SEGMENT_SIZE-1);
 		buf[DATA_SEGMENT_SIZE-1] = '\0';
 		p = newPackage(DATA, username,LIST_START_SEQ+i,0,buf);
-		sendPackage(p, connection);
+		sendPackage(p, connection, NOT_LIMITED);
 	}
 }
 

@@ -35,6 +35,8 @@
 #define FAILURE 0
 #define INVALID -1
 #define LOGGED 1
+#define LIMITED 1
+#define NOT_LIMITED 0
 
 //Commands
 
@@ -60,6 +62,7 @@
 // Connection
 
 #define TIMEOUT 3 // in seconds
+#define MAX_TRIES 3 // maximum number of tries for package transmission
 #define SEQUENCE_SHIFT 2 //sequence number shift on data transmission
 #define LIST_START_SEQ 2 //sequence number shift for file list transmission
 #define MAX_LIST_SIZE 4000
