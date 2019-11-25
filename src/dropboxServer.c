@@ -8,7 +8,6 @@ pthread_mutex_t clientListMutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t serverListMutex = PTHREAD_MUTEX_INITIALIZER;
 ServerList *svList;
 int coordinatorId;
-
 char primary_server_ip[16] = "127.0.0.1";
 
 int main(int argc, char *argv[]) {
@@ -16,6 +15,7 @@ int main(int argc, char *argv[]) {
     int id;
     Server *server;
     coordinatorId = 1;
+
 	initializer_static_svlist();
 	auxList = svList;
 
@@ -23,7 +23,7 @@ int main(int argc, char *argv[]) {
 	DEBUG_PRINT2("LISTA ESTATICA DE SERVIDORES \n ---------------------------------------------- \n\n");
 
 	while(auxList != NULL) {
-        DEBUG_PRINT2("ID: %d PORTA PADRAO: %d PORTA ELEICAO: %d PORTA \n", auxList->server->id, auxList->server->defaultPort, auxList->server->bullyPort);
+        DEBUG_PRINT2("ID: %d ENDEREÇO IP: %s PORTA ELEICAO: %d PORTA \n", auxList->server->id, auxList->server->ip, auxList->server->bullyPort);
         auxList = auxList->next;
 	}
 	DEBUG_PRINT2("\n");
@@ -55,7 +55,7 @@ int main(int argc, char *argv[]) {
 	return 0;
 }
 
-void* coordinatorFunction() {         //MAIN DA PT1 DO TRABALHO
+void* coordinatorFunction() {      //MAIN DA PT1 DO TRABALHO
 	int sockfd;
 	struct sockaddr_in serv_addr;
 	int *port_count = malloc(sizeof(int));
@@ -92,7 +92,7 @@ void* coordinatorFunction() {         //MAIN DA PT1 DO TRABALHO
 	bzero(&(serv_addr.sin_zero), 8);
 
 	if (bind(sockfd, (struct sockaddr *) &serv_addr, sizeof(struct sockaddr)) < 0)
-		fprintf(stderr, "ERROR on binding");
+		fprintf(stderr, "ERROR on binding ops");
 
 	*port_count = PORT;
 
@@ -157,7 +157,11 @@ void* electionFunction(void* arg) {
 
 	char buffer[256];
 
-	sv = gethostbyname("localhost");
+	sv = gethostbyname("localhost"); //pode mudar pra server->ip
+	if (sv == NULL) {
+        fprintf(stderr,"ERROR, no such host\n");
+        exit(0);
+    }
 	if (sv == NULL) {
         fprintf(stderr,"ERROR, no such host\n");
         exit(0);
@@ -168,7 +172,7 @@ void* electionFunction(void* arg) {
     setTimeout(sockfd);
 
 	serv_addr.sin_family = AF_INET;
-	serv_addr.sin_port = htons(coordinatorId);
+	serv_addr.sin_port = htons(coordinatorId); // nao faz sentido
 	serv_addr.sin_addr = *((struct in_addr *)sv->h_addr);
 	bzero(&(serv_addr.sin_zero), 8);
 
@@ -239,7 +243,7 @@ void broadcastUnique(int operation, char* file, char *username, struct sockaddr_
 	pthread_mutex_lock(&clientListMutex);
     while(current != NULL){
     	first_client_ip = strdup(inet_ntoa(current->client->addr[0].sin_addr));
-    	second_client_ip = strdup(inet_ntoa(current->client->addr[1].sin_addr));   	
+    	second_client_ip = strdup(inet_ntoa(current->client->addr[1].sin_addr));
 
         if (strcmp(current->client->username, username) == 0) {
             if(current->client->devices[0] != INVALID && strcmp(first_client_ip, own_ip) != 0){
@@ -680,58 +684,67 @@ Server* getServer(int id) {
 }
 
 void initializer_static_svlist() {
+    FILE * fp;
+    char * line = NULL;
+    size_t len = 0;
+    ssize_t read;
+    int i = 0;
+
+
     ServerList *auxList;
-    Server *sv1 = malloc(sizeof(Server));
-    Server *sv2 = malloc(sizeof(Server));
-    Server *sv3 = malloc(sizeof(Server));
-    Server *sv4 = malloc(sizeof(Server));
-    // TODO: dont let the ips hardcoded
-    sv1->id = 1;
-    sv1->defaultPort = 5001;
-    sv1->bullyPort = 6001;
-    strcpy(sv1->ip,"127.0.0.1");
-    sv2->id = 2;
-    sv2->defaultPort = 5002;
-    sv2->bullyPort = 6002;
-    strcpy(sv2->ip,"127.0.0.1");
-    sv3->id = 3;
-    sv3->defaultPort = 5003;
-    sv3->bullyPort = 6003;
-    strcpy(sv3->ip,"127.0.0.1");
-    sv4->id = 4;
-    sv4->defaultPort = 5004;
-    sv4->bullyPort = 6004;
-    strcpy(sv4->ip,"127.0.0.1");
+    Server **sv = malloc(4 * sizeof(Server));
+    for (i = 0; i < 4; i++) {
+        sv[i] = malloc(sizeof(Server));
+    }
+
+    fp = fopen("../resource/SVList.txt", "r");
+    if (fp == NULL)
+        exit(EXIT_FAILURE);
+
+    i = 0;
+
+    while ((read = getline(&line, &len, fp)) != -1) {
+        sv[i]->id = i + 1;
+        strcpy(sv[i]->ip, line);
+        read = getline(&line, &len, fp);
+        sv[i]->bullyPort = atoi(line);
+        i++;
+    }
+
+    fclose(fp);
+    if (line) {
+        free(line);
+    }
 
     auxList = malloc(sizeof(ServerList));
-    auxList->server = sv4;
+    auxList->server = sv[3];
     auxList->next = NULL;
     svList = auxList;
     auxList = malloc(sizeof(ServerList));
-    auxList->server = sv3;
+    auxList->server = sv[2];
     auxList->next = NULL;
     svList->next = auxList;
     auxList = malloc(sizeof(ServerList));
-    auxList->server = sv2;
+    auxList->server = sv[1];
     auxList->next = NULL;
     svList->next->next = auxList;
     auxList = malloc(sizeof(ServerList));
-    auxList->server = sv1;
+    auxList->server = sv[0];
     auxList->next = NULL;
     svList->next->next->next = auxList;
 }
 
-int getCoordinatorPort() {
+Server* getCoordinator() {
     ServerList *auxList = svList;
 
 	while(auxList != NULL) {
         if (coordinatorId == auxList->server->id) {
-            return auxList->server->bullyPort;
+            return auxList->server;
         }
         auxList = auxList->next;
 	}
 
-	return INVALID;
+	return NULL;
 }
 
 void sendCoordinatorMessage(Server* server) {
@@ -745,15 +758,15 @@ void sendCoordinatorMessage(Server* server) {
 	itoa(server->id, data);
 	Package *bufferSend = newPackage(COORDINATOR, "bully", 0, 0, data);
 
-	sv = gethostbyname("localhost");
-	if (sv == NULL) {
-        fprintf(stderr,"ERROR, no such host\n");
-        exit(0);
-    }
-
 	auxList = svList;
 	while (auxList != NULL) {
         if (server->id < auxList->server->id) {
+
+            sv = gethostbyname(auxList->server->ip);
+            if (sv == NULL) {
+                fprintf(stderr,"ERROR, no such host\n");
+                exit(0);
+            }
             if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) == -1)
                 printf("ERROR opening socket");
             serv_addr.sin_family = AF_INET;
@@ -769,6 +782,7 @@ void sendCoordinatorMessage(Server* server) {
 
 void *testCoordinator(void *arg) {
     Server* server = (Server*) arg;
+    Server* coordinator;
     int sockfd;
     int verifyCoordinator = FALSE;
 	unsigned int length;
@@ -781,14 +795,16 @@ void *testCoordinator(void *arg) {
 	Package *test_fail = newPackage(TEST_FAIL, "bully", 0, 0, data);
 	Package *test_ok = newPackage(TEST_OK, "bully", 0, 0, data);
 
-	sv = gethostbyname("localhost");
+	coordinator = getCoordinator();
+
+	sv = gethostbyname(coordinator->ip);
 
 	if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) == -1)
 		printf("ERROR opening socket");
     setTimeout(sockfd);
 
 	serv_addr.sin_family = AF_INET;
-	serv_addr.sin_port = htons(getCoordinatorPort());
+	serv_addr.sin_port = htons(coordinator->bullyPort);
 	serv_addr.sin_addr = *((struct in_addr *)sv->h_addr);
 	bzero(&(serv_addr.sin_zero), 8);
 
@@ -832,17 +848,17 @@ void *startElection(void *arg) {
 	Package *bufferElection = newPackage(ELECTION, "bully", 0, 0, data);
 	Package *bufferReceive = malloc(PACKAGE_SIZE);
 
-	sv = gethostbyname("localhost");
-	if (sv == NULL) {
-        fprintf(stderr,"ERROR, no such host\n");
-        exit(0);
-    }
-
     rmlen = sizeof(struct sockaddr_in);
 	auxList = svList;
 	receiveAnswer = FALSE;
 	while (auxList != NULL && !receiveAnswer) {
         if (server->id > auxList->server->id) {
+
+            sv = gethostbyname(auxList->server->ip);
+            if (sv == NULL) {
+                fprintf(stderr,"ERROR, no such host\n");
+                exit(0);
+            }
             if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) == -1)
                 printf("ERROR opening socket");
             setTimeout(sockfd);

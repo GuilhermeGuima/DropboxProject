@@ -33,7 +33,6 @@ typedef struct client_list {
 
 typedef struct server {
   int id;
-  int defaultPort;
   int bullyPort;
   char ip[16];
 } Server;
@@ -150,7 +149,7 @@ void *electionFunction(void* arg);
 int setTimeoutElection(int sockfd);
 Server* getServer(int id);
 void initializer_static_svlist();
-int getCoordinatorPort();
+Server *getCoordinator();
 void sendCoordinatorMessage(Server* server);
 void *testCoordinator(void *arg);
 void *startElection(void *arg);
