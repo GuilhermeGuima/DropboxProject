@@ -3,12 +3,11 @@
 
 ClientList *client_list;
 sem_t portBarrier;
-pthread_t main_thread, bully_thread, replica_thread;
+pthread_t bully_thread, replica_thread;
 pthread_mutex_t clientListMutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t serverListMutex = PTHREAD_MUTEX_INITIALIZER;
 ServerList *svList;
 int coordinatorId;
-char primary_server_ip[16] = "127.0.0.1";
 
 int main(int argc, char *argv[]) {
 	ServerList *auxList;
@@ -45,10 +44,10 @@ int main(int argc, char *argv[]) {
         pthread_create(&bully_thread, NULL, bullyThread, (void*) server);
 
         if (server->id == coordinatorId) {
-            pthread_create(&main_thread, NULL, coordinatorFunction, NULL);
+            coordinatorFunction();
         } else {
-            pthread_create(&main_thread, NULL, electionFunction, (void*) server);
-            pthread_create(&replica_thread, NULL, replicaManagerThread, NULL);
+        	pthread_create(&replica_thread, NULL, replicaManagerThread, NULL);
+            electionFunction(server);
         }
 	}
 
@@ -147,7 +146,7 @@ void* coordinatorFunction() {      //MAIN DA PT1 DO TRABALHO
 	return NULL;
 }
 
-void* electionFunction(void* arg) {
+void* electionFunction(Server* thisServer) {
     int sockfd, n, status;
     int *res;
     int changedCoordinator = FALSE;
@@ -157,7 +156,7 @@ void* electionFunction(void* arg) {
 
 	char buffer[256];
 
-	sv = gethostbyname("localhost"); //pode mudar pra server->ip
+	sv = gethostbyname(thisServer->ip);
 	if (sv == NULL) {
         fprintf(stderr,"ERROR, no such host\n");
         exit(0);
@@ -178,7 +177,7 @@ void* electionFunction(void* arg) {
 
 	printf("RM a postos\n");
 
-	while(TRUE) {
+	while(!changedCoordinator) {
 
         bzero(buffer, 256);
         strcpy(buffer, "OK");
@@ -194,12 +193,15 @@ void* electionFunction(void* arg) {
              status = pthread_join(bully_thread, (void **) &res);
              if (status != 0)
                 exit(1);
-             changedCoordinator = coordinatorId != *res;
              coordinatorId = *res;
+             changedCoordinator = TRUE;
 
-             if(changedCoordinator){
-             	// TODO: change connections to new server
-             }
+         	if(thisServer->id == coordinatorId){
+         		// this server was elected the coordinator
+         		announce_election_to_clients();
+         		// cancel the thread listening to the primary server commands
+         		pthread_cancel(replica_thread);
+         	}
 
         } else {
             printf("SYSTEM: %s\n", buffer);
@@ -1181,4 +1183,40 @@ void* replicaManagerThread(){
 		}
 	}
 
+}
+
+void announce_election_to_clients(){
+	int seqnum, socket_ann;
+	Packet *packet;
+	struct sockaddr_in cli_addr;
+	Connection *connectionCli = malloc(sizeof(Connection));
+
+	pthread_mutex_lock(&clientListMutex);
+
+	ClientList *current = client_list;
+
+	while(current != NULL){
+		for(int i = 0; i < 2; i++){
+	 		if(current->client->devices[i] == LOGGED){
+	 			seqnum = 0;
+
+	     		if ((socket_ann = socket(AF_INET, SOCK_DGRAM, 0)) == -1)
+					printf("ERROR opening socket");
+
+				cli_addr = current->client->addr[i];
+				bzero(&(cli_addr.sin_zero), 8);
+
+				connectionCli->socket = socket_ann;
+				connectionCli->address = &cli_addr;
+
+				packet = newPacket(ANNOUNCE_ELECTION,current->client->username,seqnum,0,INFO_ELECTION);
+				sendPacket(packet, connectionCli, NOT_LIMITED);
+				seqnum = 1 - seqnum;
+
+				close(socket_ann);
+		    }
+		}
+	    current = current->next;
+	}
+	pthread_mutex_lock(&clientListMutex);
 }

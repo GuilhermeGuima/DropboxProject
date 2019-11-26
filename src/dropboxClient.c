@@ -468,7 +468,7 @@ void *election_thread(){
 		fprintf(stderr, "ERROR opening socket");
 
 	cli_addr.sin_family = AF_INET;
-	cli_addr.sin_port = htons(CLIENTS_PORT);
+	cli_addr.sin_port = htons(FRONT_END_PORT);
 	cli_addr.sin_addr.s_addr = INADDR_ANY;
 	bzero(&(cli_addr.sin_zero), 8);
 

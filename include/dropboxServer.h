@@ -145,7 +145,7 @@ void* replicaManagerThread();
 // DEIXAR BONITO DEPOIS NATY
 
 void *coordinatorFunction();
-void *electionFunction(void* arg);
+void *electionFunction(Server* thisServer);
 int setTimeoutElection(int sockfd);
 Server* getServer(int id);
 void initializer_static_svlist();
@@ -157,3 +157,4 @@ void *bullyThread(void *arg);
 int send_delete_to_replicas(char* user, char* file_path);
 int send_upload_to_replicas(char* user, char* file_path);
 int send_new_client_to_replicas(char* user, struct sockaddr_in* addr_client);
+void announce_election_to_clients();

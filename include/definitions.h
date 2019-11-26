@@ -48,6 +48,7 @@
 #define CMD_GETSYNCDIR "get_sync_dir"
 #define CMD_EXIT "exit"
 #define CMD_CONNECT "connect"
+#define INFO_ELECTION "announce_election"
 
 //Commands Length
 
