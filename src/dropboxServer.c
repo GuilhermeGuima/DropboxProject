@@ -872,6 +872,8 @@ void *testCoordinator() {
 	}
 	close(sockfd);
 
+	sv = gethostbyname(thisServer->ip);
+
 	if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) == -1)
                 printf("ERROR opening socket");
     serv_addr.sin_family = AF_INET;
@@ -933,6 +935,8 @@ void *startElection() {
         }
         auxList = auxList->next;
 	}
+
+	sv = gethostbyname(thisServer->ip);
 
 	if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) == -1)
                 printf("ERROR opening socket");
