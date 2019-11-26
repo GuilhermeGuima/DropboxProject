@@ -3,20 +3,20 @@
 
 ClientList *client_list;
 sem_t portBarrier;
-pthread_t bully_thread, replica_thread;
+pthread_t bully_thread, replica_thread, coordinator_thread;
 pthread_mutex_t clientListMutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t serverListMutex = PTHREAD_MUTEX_INITIALIZER;
 ServerList *svList;
+Server *thisServer;
 int coordinatorId;
 
 int main(int argc, char *argv[]) {
 	ServerList *auxList;
     int id;
-    Server *server;
     coordinatorId = 1;
-
 	initializer_static_svlist();
 	auxList = svList;
+	Server *server = malloc(sizeof(Server));
 
 
 	DEBUG_PRINT2("LISTA ESTATICA DE SERVIDORES \n ---------------------------------------------- \n\n");
@@ -34,27 +34,29 @@ int main(int argc, char *argv[]) {
 
 	id = atoi(argv[1]);
 	server = getServer(id);
+	thisServer = server;
 
-	if(server == NULL) {
+	if(thisServer == NULL) {
         printf("O servidor com ID %d nao existe\n", id);
         return 0;
 	}
 
 	while (TRUE) {
-        pthread_create(&bully_thread, NULL, bullyThread, (void*) server);
+        pthread_create(&bully_thread, NULL, bullyThread, NULL);
 
-        if (server->id == coordinatorId) {
-            coordinatorFunction();
+        if (thisServer->id == coordinatorId) {
+            pthread_create(&coordinator_thread, NULL, coordinatorThread, NULL);
+            coordinatorElectionFunction();
         } else {
         	pthread_create(&replica_thread, NULL, replicaManagerThread, NULL);
-            electionFunction(server);
+            replicaElectionFunction();
         }
 	}
 
 	return 0;
 }
 
-void* coordinatorFunction() {      //MAIN DA PT1 DO TRABALHO
+void *coordinatorThread() { //MAIN DA PT1 DO TRABALHO
 	int sockfd;
 	struct sockaddr_in serv_addr;
 	int *port_count = malloc(sizeof(int));
@@ -91,7 +93,7 @@ void* coordinatorFunction() {      //MAIN DA PT1 DO TRABALHO
 	bzero(&(serv_addr.sin_zero), 8);
 
 	if (bind(sockfd, (struct sockaddr *) &serv_addr, sizeof(struct sockaddr)) < 0)
-		fprintf(stderr, "ERROR on binding ops");
+		fprintf(stderr, "ERROR on binding");
 
 	*port_count = PORT;
 
@@ -118,7 +120,7 @@ void* coordinatorFunction() {      //MAIN DA PT1 DO TRABALHO
 			// client sync socket
 			pthread_create(&th2, NULL, syncThread, (void*) port_count);
 			sem_wait(&portBarrier);
-		}else if(buffer->type == CMD){
+		} else if(buffer->type == CMD){
 			// new client socket--
 			createClientFolder(client->username);
 			pthread_create(&th1, NULL, clientThread, (void*) port_count);
@@ -146,21 +148,58 @@ void* coordinatorFunction() {      //MAIN DA PT1 DO TRABALHO
 	return NULL;
 }
 
-void* electionFunction(Server* thisServer) {
+void* coordinatorElectionFunction() {
+    int sockfd, n;
+	socklen_t rmlen;
+	struct sockaddr_in serv_addr, rm_addr;
+	char buf[256];
+
+    if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) == -1)
+		printf("ERROR opening socket");
+
+	serv_addr.sin_family = AF_INET;
+	serv_addr.sin_port = htons(CRASHED_TESTER_PORT);
+	serv_addr.sin_addr.s_addr = INADDR_ANY;
+	bzero(&(serv_addr.sin_zero), 8);
+
+	if (bind(sockfd, (struct sockaddr *) &serv_addr, sizeof(struct sockaddr)) < 0)
+		printf("ERROR on binding");
+
+	rmlen = sizeof(struct sockaddr_in);
+
+	DEBUG_PRINT2("BULLY - FUNÇÃO PARA TESTAR DISPONIBILIDADE DO COORDENADOR RODANDO\n");
+
+	while (1) {
+        bzero(buf, 256);
+
+		n = recvfrom(sockfd, buf, 256, 0, (struct sockaddr *) &rm_addr, &rmlen);
+		if (n < 0)
+			printf("ERROR on recvfrom");
+		printf("SYSTEM: %s\n", buf);
+
+		if(strcmp(buf,"OK") == 0) {
+
+            n = sendto(sockfd, "ACK", 3, 0,(struct sockaddr *) &rm_addr, sizeof(struct sockaddr));
+            if (n  < 0)
+                printf("ERROR on sendto");
+		}
+	}
+	close(sockfd);
+}
+
+void* replicaElectionFunction() {
     int sockfd, n, status;
     int *res;
     int changedCoordinator = FALSE;
+    Server *coordinator;
 	unsigned int length;
 	struct sockaddr_in serv_addr, from;
 	struct hostent *sv;
-
 	char buffer[256];
 
-	sv = gethostbyname(thisServer->ip);
-	if (sv == NULL) {
-        fprintf(stderr,"ERROR, no such host\n");
-        exit(0);
-    }
+	coordinator = getCoordinator();
+
+	sv = gethostbyname(coordinator->ip);
 	if (sv == NULL) {
         fprintf(stderr,"ERROR, no such host\n");
         exit(0);
@@ -171,11 +210,11 @@ void* electionFunction(Server* thisServer) {
     setTimeout(sockfd);
 
 	serv_addr.sin_family = AF_INET;
-	serv_addr.sin_port = htons(coordinatorId); // nao faz sentido
+	serv_addr.sin_port = htons(CRASHED_TESTER_PORT);
 	serv_addr.sin_addr = *((struct in_addr *)sv->h_addr);
 	bzero(&(serv_addr.sin_zero), 8);
 
-	printf("RM a postos\n");
+	DEBUG_PRINT2("BULLY - FUNÇÃO PARA TESTAR DISPONIBILIDADE DO COORDENADOR RODANDO\n");
 
 	while(!changedCoordinator) {
 
@@ -196,6 +235,9 @@ void* electionFunction(Server* thisServer) {
              coordinatorId = *res;
              changedCoordinator = TRUE;
 
+
+            /*
+
          	if(thisServer->id == coordinatorId){
          		// this server was elected the coordinator
          		announce_election_to_clients();
@@ -203,10 +245,22 @@ void* electionFunction(Server* thisServer) {
          		pthread_cancel(replica_thread);
          	}
 
+         	*/
+
+         	if(thisServer->id == coordinatorId){
+         		// this server was elected the coordinator
+         		//announce_election_to_clients();
+         		printf("anuncia para os clientes ser novo coordenador...\n");
+         	}
+
+         	// cancel the thread listening to the primary server commands
+         	pthread_cancel(replica_thread); //tem que ver que o socket vai ficar pendurado
+
+
         } else {
             printf("SYSTEM: %s\n", buffer);
             if(strcmp(buffer, "ACK") == 0) {
-                sleep(2);
+                sleep(3);
             }
         }
 	}
@@ -707,6 +761,7 @@ void initializer_static_svlist() {
 
     while ((read = getline(&line, &len, fp)) != -1) {
         sv[i]->id = i + 1;
+        chomp(line);
         strcpy(sv[i]->ip, line);
         read = getline(&line, &len, fp);
         sv[i]->bullyPort = atoi(line);
@@ -749,7 +804,7 @@ Server* getCoordinator() {
 	return NULL;
 }
 
-void sendCoordinatorMessage(Server* server) {
+void sendCoordinatorMessage() {
     int sockfd;
 	struct sockaddr_in serv_addr;
 	struct hostent *sv;
@@ -757,12 +812,12 @@ void sendCoordinatorMessage(Server* server) {
 	bzero(data, 256);
 	ServerList *auxList;
 
-	itoa(server->id, data);
+	itoa(thisServer->id, data);
 	Packet *bufferSend = newPacket(COORDINATOR, "bully", 0, 0, data);
 
 	auxList = svList;
 	while (auxList != NULL) {
-        if (server->id < auxList->server->id) {
+        if (thisServer->id < auxList->server->id) {
 
             sv = gethostbyname(auxList->server->ip);
             if (sv == NULL) {
@@ -782,8 +837,7 @@ void sendCoordinatorMessage(Server* server) {
 	}
 }
 
-void *testCoordinator(void *arg) {
-    Server* server = (Server*) arg;
+void *testCoordinator() {
     Server* coordinator;
     int sockfd;
     int verifyCoordinator = FALSE;
@@ -821,7 +875,7 @@ void *testCoordinator(void *arg) {
 	if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) == -1)
                 printf("ERROR opening socket");
     serv_addr.sin_family = AF_INET;
-    serv_addr.sin_port = htons(server->bullyPort);
+    serv_addr.sin_port = htons(thisServer->bullyPort);
     serv_addr.sin_addr = *((struct in_addr *)sv->h_addr);
     bzero(&(serv_addr.sin_zero), 8);
 
@@ -835,8 +889,7 @@ void *testCoordinator(void *arg) {
 	pthread_exit(NULL);
 }
 
-void *startElection(void *arg) {
-    Server* server = (Server*) arg;
+void *startElection() {
     int sockfd, receiveAnswer;
     socklen_t rmlen;
 	struct sockaddr_in serv_addr, rm_addr;
@@ -854,7 +907,7 @@ void *startElection(void *arg) {
 	auxList = svList;
 	receiveAnswer = FALSE;
 	while (auxList != NULL && !receiveAnswer) {
-        if (server->id > auxList->server->id) {
+        if (thisServer->id > auxList->server->id) {
 
             sv = gethostbyname(auxList->server->ip);
             if (sv == NULL) {
@@ -884,7 +937,7 @@ void *startElection(void *arg) {
 	if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) == -1)
                 printf("ERROR opening socket");
     serv_addr.sin_family = AF_INET;
-    serv_addr.sin_port = htons(server->bullyPort);
+    serv_addr.sin_port = htons(thisServer->bullyPort);
     serv_addr.sin_addr = *((struct in_addr *)sv->h_addr);
     bzero(&(serv_addr.sin_zero), 8);
 
@@ -900,8 +953,7 @@ void *startElection(void *arg) {
 	pthread_exit(NULL);
 }
 
-void *bullyThread(void *arg) {
-    Server* server = (Server*) arg;
+void *bullyThread() {
     int sockfd;
     pthread_t th1, th2;
     int electionStatus = WITHOUT_ELECTION;
@@ -914,13 +966,13 @@ void *bullyThread(void *arg) {
 	Packet *ack = newPacket(ACK, "bully", 0, 0, data);
 	Packet *asnwer = newPacket(ANSWER, "bully", 0, 0, data);
 
-	sleep(TIMEOUT_ELECTION); //pra evitar pacotes antigos remanescentes
+	sleep(TIMEOUT_REESTABLISH_SERVERS);
 
     if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) == -1)
 		printf("ERROR opening socket");
 
 	serv_addr.sin_family = AF_INET;
-	serv_addr.sin_port = htons(server->bullyPort);
+	serv_addr.sin_port = htons(thisServer->bullyPort);
 	serv_addr.sin_addr.s_addr = INADDR_ANY;
 	bzero(&(serv_addr.sin_zero), 8);
 
@@ -929,9 +981,9 @@ void *bullyThread(void *arg) {
 
 	rmlen = sizeof(struct sockaddr_in);
 
-	DEBUG_PRINT2("BULLY - A THREAD ESTÁ RODANDO NA PORTA %d\n", server->bullyPort);
+	DEBUG_PRINT2("BULLY - A THREAD ESTÁ RODANDO NA PORTA %d\n", thisServer->bullyPort);
 
-	if (server->id == coordinatorId) {
+	if (thisServer->id == coordinatorId) {
         while(TRUE) {
             recvfrom(sockfd, bufferReceive, PACKET_SIZE, 0, (struct sockaddr *) &rm_addr, &rmlen);
             if (bufferReceive->type == TESTER) {
@@ -945,7 +997,7 @@ void *bullyThread(void *arg) {
                 if (electionStatus == WAITING_NEW_COORDINATOR) {
                     DEBUG_PRINT2("BULLY - TIMEOUT NA ESPERA DO COORDENADOR\n"); //VERIFICAR DEPOIS
                 } else if (electionStatus == WITHOUT_ELECTION) {
-                    pthread_create(&th1, NULL, testCoordinator, (void*) server);
+                    pthread_create(&th1, NULL, testCoordinator, NULL);
                 }
             } else {
                 DEBUG_PRINT2("BULLY - NOVO PACOTE\n");
@@ -954,7 +1006,7 @@ void *bullyThread(void *arg) {
                         sendto(sockfd, asnwer, PACKET_SIZE, 0,(struct sockaddr *) &rm_addr, sizeof(struct sockaddr));
                         DEBUG_PRINT2("BULLY - ENVIADO ASNWER E INICIADO PRÓPRIA ELEIÇÃO\n");
                         electionStatus = IN_ELECTION;
-                        pthread_create(&th2, NULL, startElection, (void*) server);
+                        pthread_create(&th2, NULL, startElection, NULL);
                     } else {
                         DEBUG_PRINT2("BULLY - RECEBEU UM ELECTION ATRASADO\n");
                         sendto(sockfd, asnwer, PACKET_SIZE, 0,(struct sockaddr *) &rm_addr, sizeof(struct sockaddr)); //manda ack pra não ficar se elegendo
@@ -968,8 +1020,8 @@ void *bullyThread(void *arg) {
                 }
                 if (bufferReceive->type == SEND_COORDINATOR) {
                     DEBUG_PRINT2("BULLY - AVISANDO OUTROS SERVIDORES QUE ME TORNEI COORDENADOR\n");
-                    sendCoordinatorMessage(server);
-                    *newCoordinator = server->id;
+                    sendCoordinatorMessage();
+                    *newCoordinator = thisServer->id;
                     close(sockfd);
                     pthread_exit(newCoordinator);
                 }
@@ -979,7 +1031,7 @@ void *bullyThread(void *arg) {
                 if (bufferReceive->type == TEST_FAIL) {
                     DEBUG_PRINT2("BULLY - COORDENADOR CAIU, INICIANDO ELEIÇÃO\n");
                     electionStatus = IN_ELECTION;
-                    pthread_create(&th2, NULL, startElection, (void*) server);
+                    pthread_create(&th2, NULL, startElection, NULL);
                 }
                 if (bufferReceive->type == TEST_OK) {
                     DEBUG_PRINT2("BULLY - COORDENADOR OK\n");
@@ -1143,12 +1195,13 @@ void* replicaManagerThread(){
 		fprintf(stderr, "ERROR opening socket");
 
 	repl_addr.sin_family = AF_INET;
-	repl_addr.sin_port = htons(REPLICA_PORT);
+	//repl_addr.sin_port = htons(REPLICA_PORT);
+	repl_addr.sin_port = htons(thisServer->bullyPort+4187); //TESTANDO LOCAL
 	repl_addr.sin_addr.s_addr = INADDR_ANY;
 	bzero(&(repl_addr.sin_zero), 8);
 
 	if (bind(sockfd, (struct sockaddr *) &repl_addr, sizeof(struct sockaddr)) < 0)
-		fprintf(stderr, "ERROR on binding");
+		fprintf(stderr, "ERROR on binding8");
 
 	connectionRM->socket = sockfd;
 	connectionRM->address = &repl_addr;
@@ -1182,7 +1235,6 @@ void* replicaManagerThread(){
 			default: fprintf(stderr, "Invalid command number %d for RM thread\n", request->type);
 		}
 	}
-
 }
 
 void announce_election_to_clients(){

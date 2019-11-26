@@ -215,7 +215,7 @@ void receiveFile(Connection *connection, char** buffer, int *file_size){
     if(*file_size != 0){
         receivePacket(connection, packet, seqFile);
         *buffer = malloc((packet->length+1)*DATA_SEGMENT_SIZE);
-        
+
         while(packet->length != packet->seq-SEQUENCE_SHIFT-1){
             memcpy(*buffer+offset, packet->data, DATA_SEGMENT_SIZE);
             written += DATA_SEGMENT_SIZE;
@@ -302,4 +302,10 @@ char* itoa(int i, char b[]) {
         i = i/10;
     } while(i);
     return b;
+}
+
+void chomp(char *s) {
+    while(*s && *s != '\n' && *s != '\r') s++;
+
+    *s = 0;
 }

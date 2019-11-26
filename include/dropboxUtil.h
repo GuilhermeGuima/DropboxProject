@@ -155,6 +155,12 @@ int setTimeout(int sockfd);
 */
 char* itoa(int i, char b[]);
 
+/* Remove new line from  string
+  @input s - string to convert
+*/
+void chomp(char *s);
+
+
 /*******************************************************************
                   DEBUGGING FUNCTIONS
 ********************************************************************/

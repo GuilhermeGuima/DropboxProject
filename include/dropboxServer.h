@@ -139,21 +139,23 @@ void *clientThread(void *arg);
 */
 void *syncThread(void *arg);
 
-void* replicaManagerThread();
+void *replicaManagerThread();
+
+void *coordinatorThread();
 
 
 // DEIXAR BONITO DEPOIS NATY
 
-void *coordinatorFunction();
-void *electionFunction(Server* thisServer);
+void *replicaElectionFunction();
+void *coordinatorElectionFunction();
 int setTimeoutElection(int sockfd);
 Server* getServer(int id);
 void initializer_static_svlist();
 Server *getCoordinator();
-void sendCoordinatorMessage(Server* server);
-void *testCoordinator(void *arg);
-void *startElection(void *arg);
-void *bullyThread(void *arg);
+void sendCoordinatorMessage();
+void *testCoordinator();
+void *startElection();
+void *bullyThread();
 int send_delete_to_replicas(char* user, char* file_path);
 int send_upload_to_replicas(char* user, char* file_path);
 int send_new_client_to_replicas(char* user, struct sockaddr_in* addr_client);
