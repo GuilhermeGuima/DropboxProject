@@ -1,8 +1,8 @@
-localhost
+169.254.138.8
 6001
-localhost
+169.254.167.210
 6002
-localhost
+169.254.221.126
 6003
 localhost
 6004

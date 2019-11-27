@@ -35,6 +35,7 @@ typedef struct server {
   int id;
   int bullyPort;
   char ip[16];
+  int status;	// either UP or DOWN
 } Server;
 
 // list of the statics servers

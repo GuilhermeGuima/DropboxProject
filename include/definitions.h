@@ -87,3 +87,5 @@
 #define IN_ELECTION 9
 #define TIMEOUT_ELECTION 20
 #define TIMEOUT_REESTABLISH_SERVERS 5
+#define UP 1
+#define DOWN 0

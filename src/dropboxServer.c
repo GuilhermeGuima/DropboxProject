@@ -232,6 +232,10 @@ void* replicaElectionFunction() {
              status = pthread_join(bully_thread, (void **) &res);
              if (status != 0)
                 exit(1);
+
+            // since it failed, change the status of the server to down
+            getServer(coordinatorId)->status = DOWN;
+
              coordinatorId = *res;
              changedCoordinator = TRUE;
 
@@ -762,6 +766,7 @@ void initializer_static_svlist() {
         strcpy(sv[i]->ip, line);
         read = getline(&line, &len, fp);
         sv[i]->bullyPort = atoi(line);
+        sv[i]->status = UP;
         i++;
     }
 
@@ -1056,7 +1061,7 @@ int send_delete_to_replicas(char* user, char* file_path){
 	pthread_mutex_lock(&serverListMutex);
 	current = svList;
 	while(current != NULL){
-		if(current->server->id == coordinatorId) continue;
+		if(current->server->id == coordinatorId || current->server->status == DOWN) continue;
 
 		if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) == -1)
 			fprintf(stderr, "ERROR opening socket");
