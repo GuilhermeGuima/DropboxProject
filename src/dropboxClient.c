@@ -285,6 +285,7 @@ void *sync_thread(){
     sendPacket(p, connectionSync, NOT_LIMITED);
     seqnumSyn = 1 - seqnumSyn;
 
+    printf("122222\n");
     receivePacket(connectionSync, p, seqnumReceiveSyn);
     seqnumReceiveSyn = 1 - seqnumReceiveSyn;
 

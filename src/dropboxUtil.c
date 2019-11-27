@@ -84,6 +84,8 @@ int sendPacket(Packet *packet, Connection *connection, int limited){
     Packet *ackBuffer = malloc(PACKET_SIZE);
 
     do{
+        if(tries >= MAX_TRIES && limited == LIMITED) return FAILURE;
+
         //DEBUG_PRINT("ENVIANDO PACOTE TIPO %d SEQ %d\n", packet->type, packet->seq);
         n = sendto(connection->socket, packet, PACKET_SIZE, 0, (const struct sockaddr *) connection->address, sizeof(struct sockaddr_in));
 
@@ -104,8 +106,6 @@ int sendPacket(Packet *packet, Connection *connection, int limited){
         }
 
         tries++;
-
-        if(tries >= MAX_TRIES && limited) return FAILURE;
 
     } while(notACKed);
 

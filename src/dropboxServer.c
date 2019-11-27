@@ -105,8 +105,10 @@ void *coordinatorThread() { //MAIN DA PT1 DO TRABALHO
 		printf("Aguardando conexões de clientes\n");
 		seqnumReceive = 0; seqnumSend = 0;
 
+		printf("11111\n");
 		receivePacket(&connection, buffer, seqnumReceive);
 		seqnumReceive = 1 - seqnumReceive;
+		printf("222222 %d\n", buffer->type);
 
 		*port_count = *port_count + 1;
 
@@ -142,6 +144,7 @@ void *coordinatorThread() { //MAIN DA PT1 DO TRABALHO
 		Packet *p = newPacket(CMD,client->username,seqnumSend,0,portMapper);
 		sendPacket(p,&connection, NOT_LIMITED);
 		seqnumSend = 1 - seqnumSend;
+		printf("3333\n");
 	}
 
 	close(sockfd);
@@ -376,8 +379,8 @@ void *clientThread(void *arg) {
 	while (TRUE) {
 		sleep(2);
 
-		DEBUG_PRINT("ENTROU NO WHILE DA CLIENT THREAD\n");
-		DEBUG_PRINT("PORTA DO CLIENTE %d\n", port);
+		DEBUG_PRINT2("ENTROU NO WHILE DA CLIENT THREAD\n");
+		DEBUG_PRINT2("PORTA DO CLIENTE %d\n", port);
 
 		Packet *request = malloc(sizeof(Packet));
 		receivePacket(connection, request, seqnum);
@@ -451,8 +454,8 @@ void *syncThread(void *arg) {
 	while (TRUE) {
 		sleep(TIMEOUT);
 
-		DEBUG_PRINT("ENTROU NO WHILE DA SYNC THREAD\n");
-		DEBUG_PRINT("PORTA DO CLIENTE %d\n", port);
+		DEBUG_PRINT2("ENTROU NO WHILE DA SYNC THREAD\n");
+		DEBUG_PRINT2("PORTA DO CLIENTE %d\n", port);
 
 		Packet *request = malloc(sizeof(Packet));
 		receivePacket(connection, request, seqnum);
@@ -1061,10 +1064,15 @@ int send_delete_to_replicas(char* user, char* file_path){
 	pthread_mutex_lock(&serverListMutex);
 	current = svList;
 	while(current != NULL){
-		if(current->server->id == coordinatorId || current->server->status == DOWN) continue;
+		seqNumber = 0;
+		if(current->server->id == coordinatorId || current->server->status == DOWN) {
+			current = current->next;
+			continue;
+		}
 
 		if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) == -1)
 			fprintf(stderr, "ERROR opening socket");
+		setTimeout(sockfd);
 
 		bk_server = gethostbyname(current->server->ip);
 		repl_addr.sin_family = AF_INET;
@@ -1072,20 +1080,19 @@ int send_delete_to_replicas(char* user, char* file_path){
 		repl_addr.sin_addr = *((struct in_addr *)bk_server->h_addr);
 		bzero(&(repl_addr.sin_zero), 8);
 
-		if (bind(sockfd, (struct sockaddr *) &repl_addr, sizeof(struct sockaddr)) < 0)
-			fprintf(stderr, "ERROR on binding");
-
 		connectionDel->socket = sockfd;
 		connectionDel->address = &repl_addr;
 
 		Packet *commandPacket = newPacket(DELETE,user,seqNumber,0,filename);
 		if(sendPacket(commandPacket, connectionDel, LIMITED) == FAILURE){
 			close(sockfd);
+			current = current->next;
 			continue;
 		}
 		seqNumber = 1 - seqNumber;
 
 		close(sockfd);
+		current = current->next;
 	}
 	pthread_mutex_unlock(&serverListMutex);
 
@@ -1106,10 +1113,15 @@ int send_upload_to_replicas(char* user, char* file_path){
 	pthread_mutex_lock(&serverListMutex);
 	current = svList;
 	while(current != NULL){
-		if(current->server->id == coordinatorId) continue;
+		seqNumber = 0;
+		if(current->server->id == coordinatorId || current->server->status == DOWN){
+			current = current->next;
+			continue;
+		}
 
 		if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) == -1)
 			fprintf(stderr, "ERROR opening socket");
+		setTimeout(sockfd);
 
 		bk_server = gethostbyname(current->server->ip);
 		repl_addr.sin_family = AF_INET;
@@ -1117,15 +1129,13 @@ int send_upload_to_replicas(char* user, char* file_path){
 		repl_addr.sin_addr = *((struct in_addr *)bk_server->h_addr);
 		bzero(&(repl_addr.sin_zero), 8);
 
-		if (bind(sockfd, (struct sockaddr *) &repl_addr, sizeof(struct sockaddr)) < 0)
-			fprintf(stderr, "ERROR on binding");
-
 		connectionUp->socket = sockfd;
 		connectionUp->address = &repl_addr;
 
 		Packet *commandPacket = newPacket(UPLOAD,user,seqNumber,0,filename);
 		if(sendPacket(commandPacket, connectionUp, LIMITED) == FAILURE){
 			close(sockfd);
+			current = current->next;
 			continue;
 		}
 		seqNumber = 1 - seqNumber;
@@ -1133,6 +1143,7 @@ int send_upload_to_replicas(char* user, char* file_path){
 		sendFile(file_path, connectionUp, user);
 
 		close(sockfd);
+		current = current->next;
 	}
 	pthread_mutex_unlock(&serverListMutex);
 
@@ -1153,19 +1164,22 @@ int send_new_client_to_replicas(char* user, struct sockaddr_in* addr_client){
 	pthread_mutex_lock(&serverListMutex);
 	current = svList;
 	while(current != NULL){
-		if(current->server->id == coordinatorId) continue;
+		seqNumber = 0;
+		if(current->server->id == coordinatorId || current->server->status == DOWN) {
+			current = current->next;
+			continue;
+		}
 
 		if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) == -1)
 			fprintf(stderr, "ERROR opening socket");
+		setTimeout(sockfd);
 
+		printf("%s, %d\n", current->server->ip, current->server->id);
 		bk_server = gethostbyname(current->server->ip);
 		repl_addr.sin_family = AF_INET;
 		repl_addr.sin_port = htons(REPLICA_PORT);
 		repl_addr.sin_addr = *((struct in_addr *)bk_server->h_addr);
 		bzero(&(repl_addr.sin_zero), 8);
-
-		if (bind(sockfd, (struct sockaddr *) &repl_addr, sizeof(struct sockaddr)) < 0)
-			fprintf(stderr, "ERROR on binding");
 
 		connectionCli->socket = sockfd;
 		connectionCli->address = &repl_addr;
@@ -1174,13 +1188,11 @@ int send_new_client_to_replicas(char* user, struct sockaddr_in* addr_client){
 		memcpy(data, addr_client, sizeof(struct sockaddr_in));
 
 		Packet *commandPacket = newPacket(NEW_CLIENT,user,seqNumber,0,data);
-		if(sendPacket(commandPacket, connectionCli, LIMITED) == FAILURE){
-			close(sockfd);
-			continue;
-		}
+		sendPacket(commandPacket, connectionCli, LIMITED);
 		seqNumber = 1 - seqNumber;
 
 		close(sockfd);
+		current = current->next;
 	}
 	pthread_mutex_unlock(&serverListMutex);
 
