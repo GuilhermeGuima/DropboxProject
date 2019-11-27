@@ -41,7 +41,7 @@ int main(int argc, char *argv[]) {
 	DEBUG_PRINT("User: %s\n", user);
 	DEBUG_PRINT("Folder: %s\n", folder);
 	
-    int *new_client;
+    int *new_client = malloc(sizeof(int));
     *new_client = 1;
 
     if(pthread_create(&client_t, NULL, main_thread, &new_client)){
@@ -62,7 +62,7 @@ void selectCommand(int new) {
 	char command[12 + MAX_PATH];
 	char path[MAX_PATH];
 	char *valid;
-	int server_down = new;	// to make it transparent to the end-user that a server was down
+	int server_down = !new;	// to make it transparent to the end-user that a server was down
 
 	seqnum = 0; // resets because new socket has been created on server-side
 	
@@ -499,7 +499,7 @@ void *election_thread(){
 
 				/** Restart all threads **/
 				int *new_client;
-			    *new_client = 1;
+			    *new_client = 0;
 
 			    if(pthread_create(&client_t, NULL, main_thread, &new_client)){
 			    	fprintf(stderr,"Failure creating main client thread.\n"); return FAILURE;

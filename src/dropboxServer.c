@@ -236,8 +236,6 @@ void* replicaElectionFunction() {
              changedCoordinator = TRUE;
 
 
-            /*
-
          	if(thisServer->id == coordinatorId){
          		// this server was elected the coordinator
          		announce_election_to_clients();
@@ -245,8 +243,7 @@ void* replicaElectionFunction() {
          		pthread_cancel(replica_thread);
          	}
 
-         	*/
-
+         	/*
          	if(thisServer->id == coordinatorId){
          		// this server was elected the coordinator
          		//announce_election_to_clients();
@@ -255,7 +252,7 @@ void* replicaElectionFunction() {
 
          	// cancel the thread listening to the primary server commands
          	pthread_cancel(replica_thread); //tem que ver que o socket vai ficar pendurado
-
+         	*/
 
         } else {
             printf("SYSTEM: %s\n", buffer);
@@ -1199,8 +1196,8 @@ void* replicaManagerThread(){
 		fprintf(stderr, "ERROR opening socket");
 
 	repl_addr.sin_family = AF_INET;
-	//repl_addr.sin_port = htons(REPLICA_PORT);
-	repl_addr.sin_port = htons(thisServer->bullyPort+4187); //TESTANDO LOCAL
+	repl_addr.sin_port = htons(REPLICA_PORT);
+	//repl_addr.sin_port = htons(thisServer->bullyPort+4187); //TESTANDO LOCAL
 	repl_addr.sin_addr.s_addr = INADDR_ANY;
 	bzero(&(repl_addr.sin_zero), 8);
 
@@ -1274,5 +1271,5 @@ void announce_election_to_clients(){
 		}
 	    current = current->next;
 	}
-	pthread_mutex_lock(&clientListMutex);
+	pthread_mutex_unlock(&clientListMutex);
 }
